@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { PlusCircle, Filter } from 'lucide-react';
+import { PlusCircle, Filter, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -29,10 +29,12 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/auth-provider';
-import { coupons as allCoupons, users as allUsers, products as allProducts, User, Coupon, Product } from '@/lib/data';
+import { User, Coupon, Product } from '@/lib/data';
 import CreateCouponForm from '@/components/coupons/create-coupon-form';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
+import { db } from '@/lib/firebase';
+import { collection, getDocs, addDoc, query, where, doc, getDoc } from 'firebase/firestore';
 
 export default function CouponsPage() {
   const { user } = useAuth();
@@ -41,10 +43,52 @@ export default function CouponsPage() {
   const { toast } = useToast();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
-  const [coupons, setCoupons] = useState<Coupon[]>(allCoupons);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [agentFilter, setAgentFilter] = useState<string[]>([]);
+  
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Fetch all products
+        const productsCollection = collection(db, "products");
+        const productsSnapshot = await getDocs(productsCollection);
+        const productsList = productsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Product));
+        setProducts(productsList);
+
+        // Fetch all users
+        const usersCollection = collection(db, "users");
+        const usersSnapshot = await getDocs(usersCollection);
+        const usersList = usersSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as User));
+        setUsers(usersList);
+
+        // Fetch coupons
+        const couponsCollection = collection(db, "coupons");
+        const couponsSnapshot = await getDocs(couponsCollection);
+        const couponsList = couponsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Coupon));
+        setCoupons(couponsList);
+
+      } catch (error) {
+        console.error("Error fetching data: ", error);
+        toast({
+          variant: 'destructive',
+          title: 'Error fetching data',
+          description: 'Could not load data from the database.',
+        });
+      }
+      setLoading(false);
+    };
+
+    fetchData();
+  }, [user, toast]);
+
 
   useEffect(() => {
     if (searchParams.get('create') === 'true') {
@@ -75,17 +119,25 @@ export default function CouponsPage() {
     return result;
   }, [coupons, user, statusFilter, agentFilter]);
 
-  const addCoupon = (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
-    const newCoupon: Coupon = {
-      ...newCouponData,
-      id: coupons.length + 1,
-      code: `${allProducts.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0]}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
-      created_at: new Date().toISOString(),
-    };
-    setCoupons(prev => [newCoupon, ...prev]);
+  const addCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
+      const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0] || 'COUPON';
+      const newCoupon: Omit<Coupon, 'id'> = {
+        ...newCouponData,
+        code: `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
+        created_at: new Date().toISOString(),
+      };
+      
+      try {
+        const docRef = await addDoc(collection(db, "coupons"), newCoupon);
+        setCoupons(prev => [{...newCoupon, id: parseInt(docRef.id) }, ...prev]);
+        return true;
+      } catch (error) {
+        console.error("Error adding coupon: ", error);
+        return false;
+      }
   };
 
-  if (!user) return null;
+  if (loading || !user) return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
 
   return (
     <>
@@ -106,7 +158,7 @@ export default function CouponsPage() {
       <CreateCouponForm
         isOpen={isCreateOpen}
         setIsOpen={setCreateOpen}
-        products={allProducts.filter(p => p.is_active)}
+        products={products.filter(p => p.is_active)}
         user={user}
         onCouponCreate={addCoupon}
       />
@@ -148,7 +200,7 @@ export default function CouponsPage() {
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>Sales Agent</DropdownMenuLabel>
-                    {allUsers.filter(u => u.role === 'sales').map(agent => (
+                    {users.filter(u => u.role === 'sales').map(agent => (
                        <DropdownMenuCheckboxItem
                          key={agent.id}
                          checked={agentFilter.includes(agent.id.toString())}
@@ -181,8 +233,8 @@ export default function CouponsPage() {
             <TableBody>
               {filteredCoupons.length > 0 ? (
                 filteredCoupons.map((coupon) => {
-                  const product = allProducts.find((p) => p.id === coupon.product_id);
-                  const couponUser = allUsers.find((u) => u.id === coupon.user_id);
+                  const product = products.find((p) => p.id === coupon.product_id);
+                  const couponUser = users.find((u) => u.id === coupon.user_id);
                   return (
                     <TableRow key={coupon.id}>
                       <TableCell className="font-medium">{coupon.code}</TableCell>
@@ -194,7 +246,7 @@ export default function CouponsPage() {
                           variant={coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'}
                           className={
                             coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
-                            coupon.status === 'used' ? 'bg-primary/20 text-primary border-primary/30' :
+                            coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
                             'bg-red-500/20 text-red-700 border-red-500/30'
                           }
                         >

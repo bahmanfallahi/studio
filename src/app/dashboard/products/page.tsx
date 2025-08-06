@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { PlusCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { PlusCircle, MoreHorizontal, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -25,10 +25,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/auth-provider';
-import { products as initialProducts, Product } from '@/lib/data';
+import { Product } from '@/lib/data';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +51,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
+
 
 function ProductForm({
   product,
@@ -60,25 +62,32 @@ function ProductForm({
   onClose,
 }: {
   product: Partial<Product> | null;
-  onSave: (product: Partial<Product>) => void;
+  onSave: (product: Partial<Product>) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<Product>>(
     product || { name: '', description: '', price: 0, is_active: true }
   );
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const isNumber = type === 'number';
+    setFormData((prev) => ({ ...prev, [name]: isNumber ? parseFloat(value) : value }));
   };
 
   const handleSwitchChange = (checked: boolean) => {
     setFormData((prev) => ({ ...prev, is_active: checked }));
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    setIsSaving(true);
+    const success = await onSave(formData);
+    setIsSaving(false);
+    if (success) {
+      onClose();
+    }
   };
 
   if (!product) return null;
@@ -95,23 +104,26 @@ function ProductForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="name">Product Name</Label>
-            <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} />
+            <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} required />
           </div>
           <div>
             <Label htmlFor="description">Description</Label>
-            <Textarea id="description" name="description" value={formData.description || ''} onChange={handleChange} />
+            <Textarea id="description" name="description" value={formData.description || ''} onChange={handleChange} required/>
           </div>
           <div>
             <Label htmlFor="price">Price</Label>
-            <Input id="price" name="price" type="number" value={formData.price || 0} onChange={handleChange} />
+            <Input id="price" name="price" type="number" value={formData.price || 0} onChange={handleChange} required/>
           </div>
           <div className="flex items-center space-x-2">
             <Switch id="is_active" checked={formData.is_active} onCheckedChange={handleSwitchChange} />
             <Label htmlFor="is_active">Active</Label>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Save Product</Button>
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+            <Button type="submit" disabled={isSaving}>
+                {isSaving && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+                {isSaving ? 'Saving...' : 'Save Product'}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -122,36 +134,71 @@ function ProductForm({
 export default function ProductsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [products, setProducts] = useState<Product[]>(initialProducts);
+  const [products, setProducts] = useState<Product[]>([]);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleSave = (productData: Partial<Product>) => {
-    if (productData.id) {
-      // Edit
-      setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } as Product : p));
-       toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
-    } else {
-      // Add
-      const newProduct: Product = {
-        id: Math.max(...products.map(p => p.id)) + 1,
-        name: productData.name || '',
-        description: productData.description || '',
-        price: productData.price || 0,
-        is_active: productData.is_active === undefined ? true : productData.is_active,
-        created_at: new Date().toISOString(),
-      };
-      setProducts([newProduct, ...products]);
-      toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
+  useEffect(() => {
+    const fetchProducts = async () => {
+      setLoading(true);
+      try {
+        const productsCollection = collection(db, "products");
+        const productsSnapshot = await getDocs(productsCollection);
+        const productsList = productsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Product));
+        setProducts(productsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+      } catch (error) {
+        toast({
+          variant: 'destructive',
+          title: 'Error fetching products',
+          description: 'Could not load products from the database.',
+        });
+        console.error("Error fetching products: ", error);
+      }
+      setLoading(false);
+    };
+
+    fetchProducts();
+  }, [toast]);
+
+  const handleSave = async (productData: Partial<Product>) => {
+    try {
+      if (productData.id) {
+        // Edit
+        const productRef = doc(db, "products", productData.id.toString());
+        await setDoc(productRef, productData, { merge: true });
+        setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } as Product : p));
+        toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
+      } else {
+        // Add
+        const newProductData = {
+          ...productData,
+          created_at: new Date().toISOString(),
+        };
+        const docRef = await addDoc(collection(db, "products"), newProductData);
+        const newProduct: Product = { ...newProductData, id: parseInt(docRef.id) } as Product
+        setProducts([newProduct, ...products]);
+        toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
+      }
+      setEditingProduct(null);
+      return true;
+    } catch (error) {
+      console.error("Error saving product: ", error);
+      toast({ variant: "destructive", title: "Save Failed", description: "Could not save product to the database." });
+      return false;
     }
-    setEditingProduct(null);
   };
 
-  const handleDelete = (productId: number) => {
-    setProducts(products.filter(p => p.id !== productId));
-     toast({ variant: 'destructive', title: "Product Deleted", description: `The product has been removed.` });
+  const handleDelete = async (productId: number) => {
+    try {
+        await deleteDoc(doc(db, "products", productId.toString()));
+        setProducts(products.filter(p => p.id !== productId));
+        toast({ title: "Product Deleted", description: `The product has been removed.` });
+    } catch (error) {
+        console.error("Error deleting product: ", error);
+        toast({ variant: 'destructive', title: "Delete Failed", description: "Could not remove product from the database." });
+    }
   };
   
-
   if (user?.role !== 'manager') {
     return (
       <div className="text-center py-10">
@@ -182,6 +229,11 @@ export default function ProductsPage() {
 
       <Card>
         <CardContent className="pt-6">
+          {loading ? (
+             <div className="flex items-center justify-center h-48">
+                <LoaderCircle className="h-10 w-10 animate-spin" />
+             </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -241,6 +293,7 @@ export default function ProductsPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </>

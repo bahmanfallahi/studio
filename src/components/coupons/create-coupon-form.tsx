@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Product, User, Coupon } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
+import { LoaderCircle } from 'lucide-react';
 
 const couponSchema = z.object({
   product_id: z.string().min(1, 'Product is required'),
@@ -34,7 +35,7 @@ interface CreateCouponFormProps {
   setIsOpen: (isOpen: boolean) => void;
   products: Product[];
   user: User;
-  onCouponCreate: (coupon: Omit<Coupon, 'id'|'created_at'|'code'>) => void;
+  onCouponCreate: (coupon: Omit<Coupon, 'id'|'created_at'|'code'>) => Promise<boolean>;
 }
 
 export default function CreateCouponForm({
@@ -45,11 +46,12 @@ export default function CreateCouponForm({
   onCouponCreate,
 }: CreateCouponFormProps) {
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const {
     control,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<CouponFormData>({
     resolver: zodResolver(couponSchema),
     defaultValues: {
@@ -58,11 +60,12 @@ export default function CreateCouponForm({
     }
   });
 
-  const onSubmit = (data: CouponFormData) => {
+  const onSubmit = async (data: CouponFormData) => {
+    setIsSubmitting(true);
     const expires_at = new Date();
     expires_at.setDate(expires_at.getDate() + data.expires_in_days);
 
-    const newCoupon: Omit<Coupon, 'id'|'created_at'|'code'> = {
+    const newCouponData: Omit<Coupon, 'id'|'created_at'|'code'> = {
       product_id: parseInt(data.product_id, 10),
       discount_percent: data.discount_percent,
       expires_at: expires_at.toISOString(),
@@ -71,13 +74,23 @@ export default function CreateCouponForm({
       status: 'active',
     };
 
-    onCouponCreate(newCoupon);
-    toast({
-      title: 'Coupon Created!',
-      description: 'The new coupon has been added to your list.',
-    });
-    setIsOpen(false);
-    reset();
+    const success = await onCouponCreate(newCouponData);
+    
+    if (success) {
+      toast({
+        title: 'Coupon Created!',
+        description: 'The new coupon has been added to your list.',
+      });
+      setIsOpen(false);
+      reset();
+    } else {
+       toast({
+        variant: 'destructive',
+        title: 'Creation Failed',
+        description: 'Could not create the coupon. Please try again.',
+      });
+    }
+    setIsSubmitting(false);
   };
 
   return (
@@ -164,6 +177,7 @@ export default function CreateCouponForm({
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting && <LoaderCircle className="animate-spin mr-2"/>}
               {isSubmitting ? 'Creating...' : 'Create Coupon'}
             </Button>
           </DialogFooter>

@@ -1,11 +1,14 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User, users } from '@/lib/data';
+import { User } from '@/lib/data';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password_hash: string) => void;
+  login: (username: string, password_hash: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
   loading: boolean;
@@ -32,16 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = (username: string, password_hash: string) => {
-    const foundUser = users.find(
-      (u) => u.username === username && u.password_hash === password_hash
-    );
+  const login = async (username: string, password_hash: string) => {
+    setLoading(true);
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef, where('username', '==', username), where('password_hash', '==', password_hash));
+    
+    try {
+        const querySnapshot = await getDocs(q);
+        if (querySnapshot.empty) {
+            throw new Error('Invalid username or password');
+        }
 
-    if (foundUser) {
-      setUser(foundUser);
-      localStorage.setItem('coupon_crafter_user', JSON.stringify(foundUser));
-    } else {
-      throw new Error('Invalid username or password');
+        const foundUser = { id: parseInt(querySnapshot.docs[0].id), ...querySnapshot.docs[0].data() } as User;
+        setUser(foundUser);
+        localStorage.setItem('coupon_crafter_user', JSON.stringify(foundUser));
+
+    } catch (error) {
+        console.error("Login failed:", error);
+        throw error; // Re-throw the error to be caught by the login form
+    } finally {
+        setLoading(false);
     }
   };
 

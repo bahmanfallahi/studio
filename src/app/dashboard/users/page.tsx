@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { PlusCircle, MoreHorizontal } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { PlusCircle, MoreHorizontal, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/auth-provider';
-import { users as initialUsers, User } from '@/lib/data';
+import { User } from '@/lib/data';
 import {
   Dialog,
   DialogContent,
@@ -50,7 +50,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
+
 
 function UserForm({
   user,
@@ -58,12 +61,14 @@ function UserForm({
   onClose,
 }: {
   user: Partial<User> | null;
-  onSave: (user: Partial<User>) => void;
+  onSave: (user: Partial<User>) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<User>>(
     user || { full_name: '', username: '', role: 'sales', password_hash: '' }
   );
+  const [isSaving, setIsSaving] = useState(false);
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -74,9 +79,14 @@ function UserForm({
     setFormData((prev) => ({...prev, role: value}));
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+    setIsSaving(true);
+    const success = await onSave(formData);
+    setIsSaving(false);
+    if(success) {
+      onClose();
+    }
   };
   
   if (!user) return null;
@@ -93,15 +103,15 @@ function UserForm({
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <Label htmlFor="full_name">Full Name</Label>
-            <Input id="full_name" name="full_name" value={formData.full_name || ''} onChange={handleChange} />
+            <Input id="full_name" name="full_name" value={formData.full_name || ''} onChange={handleChange} required/>
           </div>
           <div>
-            <Label htmlFor="username">Username</Label>
-            <Input id="username" name="username" value={formData.username || ''} onChange={handleChange} />
+            <Label htmlFor="username">Username (Email)</Label>
+            <Input id="username" name="username" type="email" value={formData.username || ''} onChange={handleChange} required/>
           </div>
            <div>
             <Label htmlFor="password_hash">Password</Label>
-            <Input id="password_hash" name="password_hash" type="password" placeholder={user.id ? 'Leave blank to keep unchanged' : ''} value={formData.password_hash || ''} onChange={handleChange} />
+            <Input id="password_hash" name="password_hash" type="password" placeholder={user.id ? 'Leave blank to keep unchanged' : ''} onChange={handleChange} required={!user.id} />
           </div>
           <div>
             <Label htmlFor="role">Role</Label>
@@ -116,8 +126,11 @@ function UserForm({
             </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button type="submit">Save User</Button>
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+            <Button type="submit" disabled={isSaving}>
+                {isSaving && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+                {isSaving ? 'Saving...' : 'Save User' }
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -128,37 +141,79 @@ function UserForm({
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [users, setUsers] = useState<User[]>([]);
   const [editingUser, setEditingUser] = useState<Partial<User> | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+        setLoading(true);
+        try {
+            const usersCollection = collection(db, "users");
+            const usersSnapshot = await getDocs(usersCollection);
+            const usersList = usersSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as User));
+            setUsers(usersList.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
+        } catch (error) {
+            toast({
+                variant: 'destructive',
+                title: 'Error fetching users',
+                description: 'Could not load users from the database.',
+            });
+            console.error("Error fetching users: ", error);
+        }
+        setLoading(false);
+    };
+
+    fetchUsers();
+  }, [toast]);
   
-  const handleSave = (userData: Partial<User>) => {
-     if (userData.id) {
-      // Edit
-      setUsers(users.map(u => u.id === userData.id ? { ...u, ...userData, password_hash: userData.password_hash || u.password_hash } as User : u));
-      toast({ title: 'User Updated', description: `${userData.full_name}'s profile has been updated.` });
-    } else {
-      // Add
-      const newUser: User = {
-        id: Math.max(...users.map(u => u.id)) + 1,
-        full_name: userData.full_name || '',
-        username: userData.username || '',
-        password_hash: userData.password_hash || 'password',
-        role: userData.role || 'sales',
-        created_at: new Date().toISOString(),
-      };
-      setUsers([newUser, ...users]);
-      toast({ title: 'User Added', description: `${newUser.full_name} has been added to the system.` });
+  const handleSave = async (userData: Partial<User>) => {
+    try {
+        if (userData.id) {
+         // Edit
+         const userRef = doc(db, "users", userData.id.toString());
+         // Don't update password if it's not provided
+         const dataToSave: Partial<User> = { ...userData };
+         if (!userData.password_hash) {
+            const existingUser = users.find(u => u.id === userData.id);
+            dataToSave.password_hash = existingUser?.password_hash;
+         }
+         await setDoc(userRef, dataToSave, { merge: true });
+         setUsers(users.map(u => u.id === userData.id ? { ...u, ...dataToSave } as User : u));
+         toast({ title: 'User Updated', description: `${userData.full_name}'s profile has been updated.` });
+       } else {
+         // Add
+         const newUserData = {
+           ...userData,
+           created_at: new Date().toISOString(),
+         };
+         const docRef = await addDoc(collection(db, "users"), newUserData);
+         const newUser: User = { ...newUserData, id: parseInt(docRef.id) } as User;
+         setUsers([newUser, ...users]);
+         toast({ title: 'User Added', description: `${newUser.full_name} has been added to the system.` });
+       }
+       setEditingUser(null);
+       return true;
+    } catch (error) {
+        console.error("Error saving user: ", error);
+        toast({ variant: 'destructive', title: "Save failed", description: "Could not save user." });
+        return false;
     }
-    setEditingUser(null);
   };
 
-  const handleDelete = (userId: number) => {
+  const handleDelete = async (userId: number) => {
     if (userId === currentUser?.id) {
         toast({ variant: 'destructive', title: 'Action Forbidden', description: "You cannot delete your own account." });
         return;
     }
-    setUsers(users.filter(u => u.id !== userId));
-     toast({ variant: 'destructive', title: 'User Deleted', description: "The user has been removed from the system." });
+    try {
+        await deleteDoc(doc(db, "users", userId.toString()));
+        setUsers(users.filter(u => u.id !== userId));
+        toast({ title: 'User Deleted', description: "The user has been removed from the system." });
+    } catch(error) {
+        console.error("Error deleting user: ", error);
+        toast({ variant: 'destructive', title: "Delete failed", description: "Could not remove user from the database." });
+    }
   };
 
   if (currentUser?.role !== 'manager') {
@@ -184,13 +239,18 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold font-headline tracking-tight">Users</h1>
           <p className="text-muted-foreground">Manage your team of sales agents and managers.</p>
         </div>
-        <Button onClick={() => setEditingUser({ full_name: '', username: '', role: 'sales', password_hash: '' })}>
+        <Button onClick={() => setEditingUser({ full_name: '', username: '', role: 'sales' })}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add User
         </Button>
       </div>
 
       <Card>
         <CardContent className="pt-6">
+          {loading ? (
+             <div className="flex items-center justify-center h-48">
+                <LoaderCircle className="h-10 w-10 animate-spin" />
+             </div>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -251,6 +311,7 @@ export default function UsersPage() {
               ))}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
     </>

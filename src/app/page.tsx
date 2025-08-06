@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/auth-provider';
 import { Button } from '@/components/ui/button';
@@ -15,30 +15,35 @@ export default function LoginPage() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, user, loading } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleLogin = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, router]);
+
+
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setTimeout(() => {
-      try {
-        login(username, password);
-        toast({
-          title: 'Login Successful',
-          description: "Welcome back!",
-        });
-        router.push('/dashboard');
-      } catch (error) {
-        toast({
-          variant: 'destructive',
-          title: 'Login Failed',
-          description: (error as Error).message,
-        });
-        setIsLoading(false);
-      }
-    }, 1000);
+    try {
+      await login(username, password);
+      toast({
+        title: 'Login Successful',
+        description: "Welcome back!",
+      });
+      // The useEffect will handle the redirect
+    } catch (error) {
+      toast({
+        variant: 'destructive',
+        title: 'Login Failed',
+        description: (error as Error).message,
+      });
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -58,7 +63,7 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
+              <Label htmlFor="username">Username (Email)</Label>
               <Input
                 id="username"
                 type="text"
@@ -92,7 +97,7 @@ export default function LoginPage() {
         <DbTester />
       </div>
       <footer className="mt-8 text-sm text-muted-foreground">
-        <p>Demo with: `sales_agent_1` / `password` or `sales_manager` / `password`</p>
+        <p>After seeding DB, use: `sales_agent_1` / `password` or `sales_manager` / `password`</p>
       </footer>
     </main>
   );

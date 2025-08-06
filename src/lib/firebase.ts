@@ -1,8 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
+import { getFirestore, collection, writeBatch, doc, getDocs } from "firebase/firestore";
+import { users, products, coupons } from '@/lib/data';
 
 // Your web app's Firebase configuration
 const firebaseConfig = { 
@@ -18,5 +17,45 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 const db = getFirestore(app);
+
+// Seeding function
+export async function seedDatabase() {
+  try {
+    // Check if data already exists to prevent re-seeding
+    const productsSnapshot = await getDocs(collection(db, "products"));
+    if (!productsSnapshot.empty) {
+      console.log("Database already seeded.");
+      return { success: true, message: "Database has already been seeded." };
+    }
+
+    const batch = writeBatch(db);
+
+    // Seed users
+    users.forEach((user) => {
+      const docRef = doc(db, "users", user.id.toString());
+      batch.set(docRef, user);
+    });
+
+    // Seed products
+    products.forEach((product) => {
+      const docRef = doc(db, "products", product.id.toString());
+      batch.set(docRef, product);
+    });
+
+    // Seed coupons
+    coupons.forEach((coupon) => {
+      const docRef = doc(db, "coupons", coupon.id.toString());
+      batch.set(docRef, coupon);
+    });
+
+    await batch.commit();
+    console.log("Database seeded successfully!");
+    return { success: true, message: "Database seeded successfully!" };
+  } catch (error) {
+    console.error("Error seeding database:", error);
+    return { success: false, message: (error as Error).message };
+  }
+}
+
 
 export { app, db };
