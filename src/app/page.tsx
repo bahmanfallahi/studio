@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Ticket, LoaderCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import DbTester from '@/components/db-tester';
 
 export default function LoginPage() {
   const [username, setUsername] = useState('');
@@ -87,6 +88,9 @@ export default function LoginPage() {
           </form>
         </CardContent>
       </Card>
+      <div className="w-full max-w-sm">
+        <DbTester />
+      </div>
       <footer className="mt-8 text-sm text-muted-foreground">
         <p>Demo with: `sales_agent_1` / `password` or `sales_manager` / `password`</p>
       </footer>
