@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -127,13 +128,13 @@ export default function CouponsPage() {
       result = result.filter(c => statusFilter.includes(c.status));
     }
     if (agentFilter.length > 0 && user?.role === 'manager') {
-      result = result.filter(c => agentFilter.includes(c.user_id.toString()));
+      result = result.filter(c => agentFilter.includes(c.user_id));
     }
     return result;
   }, [coupons, user, statusFilter, agentFilter]);
 
   const addCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
-      const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0] || 'COUPON';
+      const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0].toUpperCase() || 'COUPON';
       const newCoupon: Omit<Coupon, 'id'> = {
         ...newCouponData,
         code: `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -239,9 +240,9 @@ export default function CouponsPage() {
                     {users.filter(u => u.role === 'sales').map(agent => (
                        <DropdownMenuCheckboxItem
                          key={agent.id}
-                         checked={agentFilter.includes(agent.id.toString())}
+                         checked={agentFilter.includes(agent.id)}
                          onCheckedChange={(checked) => {
-                           setAgentFilter(prev => checked ? [...prev, agent.id.toString()] : prev.filter(id => id !== agent.id.toString()))
+                           setAgentFilter(prev => checked ? [...prev, agent.id] : prev.filter(id => id !== agent.id))
                          }}
                        >
                          {agent.full_name}
