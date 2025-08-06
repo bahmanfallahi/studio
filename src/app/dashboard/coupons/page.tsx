@@ -1,0 +1,233 @@
+'use client';
+
+import { useState, useMemo, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { PlusCircle, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/components/auth-provider';
+import { coupons as allCoupons, users as allUsers, products as allProducts, User, Coupon, Product } from '@/lib/data';
+import CreateCouponForm from '@/components/coupons/create-coupon-form';
+import { useToast } from '@/hooks/use-toast';
+import Countdown from '@/components/coupon/countdown';
+
+export default function CouponsPage() {
+  const { user } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const [isCreateOpen, setCreateOpen] = useState(false);
+  const [coupons, setCoupons] = useState<Coupon[]>(allCoupons);
+
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [agentFilter, setAgentFilter] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (searchParams.get('create') === 'true') {
+      setCreateOpen(true);
+      // Clean up URL
+      router.replace('/dashboard/coupons', { scroll: false });
+    }
+  }, [searchParams, router]);
+
+  const handleCopy = (code: string) => {
+    const url = `${window.location.origin}/coupon/${code}`;
+    navigator.clipboard.writeText(url);
+    toast({
+      title: 'Copied to clipboard!',
+      description: `URL for coupon ${code} is ready to be shared.`,
+    });
+  };
+
+  const filteredCoupons = useMemo(() => {
+    let result = user?.role === 'manager' ? coupons : coupons.filter(c => c.user_id === user?.id);
+
+    if (statusFilter.length > 0) {
+      result = result.filter(c => statusFilter.includes(c.status));
+    }
+    if (agentFilter.length > 0 && user?.role === 'manager') {
+      result = result.filter(c => agentFilter.includes(c.user_id.toString()));
+    }
+    return result;
+  }, [coupons, user, statusFilter, agentFilter]);
+
+  const addCoupon = (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
+    const newCoupon: Coupon = {
+      ...newCouponData,
+      id: coupons.length + 1,
+      code: `${allProducts.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0]}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
+      created_at: new Date().toISOString(),
+    };
+    setCoupons(prev => [newCoupon, ...prev]);
+  };
+
+  if (!user) return null;
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">Coupons</h1>
+          <p className="text-muted-foreground">
+            {user.role === 'manager'
+              ? 'Manage and track all coupons.'
+              : 'View and manage your created coupons.'}
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <PlusCircle className="mr-2 h-4 w-4" /> Create Coupon
+        </Button>
+      </div>
+
+      <CreateCouponForm
+        isOpen={isCreateOpen}
+        setIsOpen={setCreateOpen}
+        products={allProducts.filter(p => p.is_active)}
+        user={user}
+        onCouponCreate={addCoupon}
+      />
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Coupon List</CardTitle>
+              <CardDescription>
+                A list of all coupons in the system.
+              </CardDescription>
+            </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1">
+                  <Filter className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                    Filter
+                  </span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                {['active', 'used', 'expired'].map(status => (
+                  <DropdownMenuCheckboxItem
+                    key={status}
+                    checked={statusFilter.includes(status)}
+                    onCheckedChange={(checked) => {
+                      setStatusFilter(prev => checked ? [...prev, status] : prev.filter(s => s !== status))
+                    }}
+                  >
+                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                  </DropdownMenuCheckboxItem>
+                ))}
+                {user.role === 'manager' && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuLabel>Sales Agent</DropdownMenuLabel>
+                    {allUsers.filter(u => u.role === 'sales').map(agent => (
+                       <DropdownMenuCheckboxItem
+                         key={agent.id}
+                         checked={agentFilter.includes(agent.id.toString())}
+                         onCheckedChange={(checked) => {
+                           setAgentFilter(prev => checked ? [...prev, agent.id.toString()] : prev.filter(id => id !== agent.id.toString()))
+                         }}
+                       >
+                         {agent.full_name}
+                       </DropdownMenuCheckboxItem>
+                    ))}
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Code</TableHead>
+                {user.role === 'manager' && <TableHead>Agent</TableHead>}
+                <TableHead>Product</TableHead>
+                <TableHead>Discount</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Expires In</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredCoupons.length > 0 ? (
+                filteredCoupons.map((coupon) => {
+                  const product = allProducts.find((p) => p.id === coupon.product_id);
+                  const couponUser = allUsers.find((u) => u.id === coupon.user_id);
+                  return (
+                    <TableRow key={coupon.id}>
+                      <TableCell className="font-medium">{coupon.code}</TableCell>
+                       {user.role === 'manager' && <TableCell>{couponUser?.full_name || 'N/A'}</TableCell>}
+                      <TableCell>{product?.name || 'N/A'}</TableCell>
+                      <TableCell>{coupon.discount_percent}%</TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'}
+                          className={
+                            coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
+                            coupon.status === 'used' ? 'bg-primary/20 text-primary border-primary/30' :
+                            'bg-red-500/20 text-red-700 border-red-500/30'
+                          }
+                        >
+                          {coupon.status}
+                        </Badge>
+                      </TableCell>
+                       <TableCell>
+                          {coupon.status === 'active' ? (
+                            <Countdown expiryDate={coupon.expires_at} />
+                          ) : (
+                            new Date(coupon.expires_at).toLocaleDateString()
+                          )}
+                        </TableCell>
+                      <TableCell className="text-right">
+                        <Button variant="ghost" size="icon" onClick={() => handleCopy(coupon.code)}>
+                          <span className="sr-only">Copy Link</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={user.role === 'manager' ? 7 : 6} className="h-24 text-center">
+                    No coupons found.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </>
+  );
+}
