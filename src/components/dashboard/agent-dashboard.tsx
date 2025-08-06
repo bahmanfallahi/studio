@@ -16,33 +16,56 @@ export default function AgentDashboard({ user }: { user: User }) {
   const { toast } = useToast();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ total: 0, active: 0, used: 0 });
 
   useEffect(() => {
-    const fetchCoupons = async () => {
+    const fetchDashboardData = async () => {
       if (!user) return;
       setLoading(true);
       try {
-        const couponsRef = collection(db, "coupons");
-        const q = query(
-          couponsRef, 
+        // Fetch all coupons for stats
+        const allCouponsRef = collection(db, "coupons");
+        const allCouponsQuery = query(allCouponsRef, where("user_id", "==", user.id));
+        const allCouponsSnapshot = await getDocs(allCouponsQuery);
+        const allCouponsList = allCouponsSnapshot.docs.map(doc => doc.data() as Coupon);
+
+        setStats({
+          total: allCouponsList.length,
+          active: allCouponsList.filter(c => c.status === 'active').length,
+          used: allCouponsList.filter(c => c.status === 'used').length
+        });
+
+        // Fetch last 5 recent coupons for table
+        const recentCouponsQuery = query(
+          allCouponsRef, 
           where("user_id", "==", user.id), 
           orderBy("created_at", "desc"),
           limit(5)
         );
-        const querySnapshot = await getDocs(q);
-        const couponsList = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
-        setCoupons(couponsList);
+        const recentCouponsSnapshot = await getDocs(recentCouponsQuery);
+        const recentCouponsList = recentCouponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
+        setCoupons(recentCouponsList);
+
       } catch (error) {
         console.error("Failed to fetch coupons: ", error);
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description: 'Could not fetch recent coupons.'
-        });
+        if ((error as any).code === 'failed-precondition') {
+             toast({
+              variant: 'destructive',
+              title: 'Database Index Required',
+              description: 'Please ask the administrator to create the necessary Firestore index to view your coupons.',
+              duration: 10000
+            });
+        } else {
+            toast({
+              variant: 'destructive',
+              title: 'Error',
+              description: 'Could not fetch recent coupons.'
+            });
+        }
       }
       setLoading(false);
     };
-    fetchCoupons();
+    fetchDashboardData();
   }, [user, toast]);
 
   const handleCopy = (code: string) => {
@@ -53,10 +76,6 @@ export default function AgentDashboard({ user }: { user: User }) {
       description: `URL for coupon ${code} is ready to be shared.`,
     });
   };
-  
-  const totalCoupons = coupons.length; // This is only the last 5, might need adjustment for full count
-  const activeCoupons = coupons.filter(c => c.status === 'active').length;
-  const usedCoupons = coupons.filter(c => c.status === 'used').length;
 
   return (
     <div className="space-y-6">
@@ -80,12 +99,12 @@ export default function AgentDashboard({ user }: { user: User }) {
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Your Recent Coupons</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Coupons Created</CardTitle>
             <Ticket className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCoupons}</div>
-            <p className="text-xs text-muted-foreground">in the last few days</p>
+            <div className="text-2xl font-bold">{stats.total}</div>
+            <p className="text-xs text-muted-foreground">All-time</p>
           </CardContent>
         </Card>
         <Card>
@@ -94,8 +113,8 @@ export default function AgentDashboard({ user }: { user: User }) {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{activeCoupons}</div>
-            <p className="text-xs text-muted-foreground">of recent are live</p>
+            <div className="text-2xl font-bold">{stats.active}</div>
+            <p className="text-xs text-muted-foreground">Currently live</p>
           </CardContent>
         </Card>
         <Card>
@@ -104,8 +123,8 @@ export default function AgentDashboard({ user }: { user: User }) {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{usedCoupons}</div>
-            <p className="text-xs text-muted-foreground">of recent converted</p>
+            <div className="text-2xl font-bold">{stats.used}</div>
+            <p className="text-xs text-muted-foreground">Converted to sales</p>
           </CardContent>
         </Card>
       </div>
