@@ -46,8 +46,6 @@ export default function OptimizeForm({ products, salesAgents }: OptimizeFormProp
     try {
       const input: OptimizeDiscountInput = {
         ...data,
-        productId: parseInt(data.productId),
-        salesAgentId: parseInt(data.salesAgentId),
       };
       const response = await optimizeDiscount(input);
       setResult(response);
@@ -74,7 +72,7 @@ export default function OptimizeForm({ products, salesAgents }: OptimizeFormProp
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <SelectTrigger><SelectValue placeholder="Select a product" /></SelectTrigger>
-                    <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.id.toString()}>{p.name}</SelectItem>)}</SelectContent>
+                    <SelectContent>{products.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}</SelectContent>
                   </Select>
                 )}
               />
@@ -89,7 +87,7 @@ export default function OptimizeForm({ products, salesAgents }: OptimizeFormProp
                 render={({ field }) => (
                   <Select onValueChange={field.onChange} defaultValue={field.value}>
                     <SelectTrigger><SelectValue placeholder="Select an agent" /></SelectTrigger>
-                    <SelectContent>{salesAgents.map((a) => <SelectItem key={a.id} value={a.id.toString()}>{a.full_name}</SelectItem>)}</SelectContent>
+                    <SelectContent>{salesAgents.map((a) => <SelectItem key={a.id} value={a.id}>{a.full_name}</SelectItem>)}</SelectContent>
                   </Select>
                 )}
               />

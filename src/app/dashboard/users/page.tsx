@@ -151,7 +151,7 @@ export default function UsersPage() {
         try {
             const usersCollection = collection(db, "users");
             const usersSnapshot = await getDocs(usersCollection);
-            const usersList = usersSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as User));
+            const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
             setUsers(usersList.sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
         } catch (error) {
             toast({
@@ -171,7 +171,7 @@ export default function UsersPage() {
     try {
         if (userData.id) {
          // Edit
-         const userRef = doc(db, "users", userData.id.toString());
+         const userRef = doc(db, "users", userData.id);
          // Don't update password if it's not provided
          const dataToSave: Partial<User> = { ...userData };
          if (!userData.password_hash) {
@@ -188,7 +188,7 @@ export default function UsersPage() {
            created_at: new Date().toISOString(),
          };
          const docRef = await addDoc(collection(db, "users"), newUserData);
-         const newUser: User = { ...newUserData, id: parseInt(docRef.id) } as User;
+         const newUser: User = { ...newUserData, id: docRef.id } as User;
          setUsers([newUser, ...users]);
          toast({ title: 'User Added', description: `${newUser.full_name} has been added to the system.` });
        }
@@ -201,13 +201,13 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (userId: number) => {
+  const handleDelete = async (userId: string) => {
     if (userId === currentUser?.id) {
         toast({ variant: 'destructive', title: 'Action Forbidden', description: "You cannot delete your own account." });
         return;
     }
     try {
-        await deleteDoc(doc(db, "users", userId.toString()));
+        await deleteDoc(doc(db, "users", userId));
         setUsers(users.filter(u => u.id !== userId));
         toast({ title: 'User Deleted', description: "The user has been removed from the system." });
     } catch(error) {
@@ -287,7 +287,7 @@ export default function UsersPage() {
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => setEditingUser(user)}>Edit</DropdownMenuItem>
                           <AlertDialogTrigger asChild>
-                              <DropdownMenuItem className="text-red-600" disabled={user.id === currentUser.id}>
+                              <DropdownMenuItem className="text-red-600" disabled={user.id === currentUser?.id}>
                                   Delete
                               </DropdownMenuItem>
                           </AlertDialogTrigger>

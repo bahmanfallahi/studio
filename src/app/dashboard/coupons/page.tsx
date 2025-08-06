@@ -60,19 +60,19 @@ export default function CouponsPage() {
         // Fetch all products
         const productsCollection = collection(db, "products");
         const productsSnapshot = await getDocs(productsCollection);
-        const productsList = productsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Product));
+        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
         setProducts(productsList);
 
         // Fetch all users
         const usersCollection = collection(db, "users");
         const usersSnapshot = await getDocs(usersCollection);
-        const usersList = usersSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as User));
+        const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         setUsers(usersList);
 
         // Fetch coupons
         const couponsCollection = collection(db, "coupons");
         const couponsSnapshot = await getDocs(couponsCollection);
-        const couponsList = couponsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Coupon));
+        const couponsList = couponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
         setCoupons(couponsList);
 
       } catch (error) {
@@ -129,7 +129,7 @@ export default function CouponsPage() {
       
       try {
         const docRef = await addDoc(collection(db, "coupons"), newCoupon);
-        setCoupons(prev => [{...newCoupon, id: parseInt(docRef.id) }, ...prev]);
+        setCoupons(prev => [{...newCoupon, id: docRef.id }, ...prev]);
         return true;
       } catch (error) {
         console.error("Error adding coupon: ", error);

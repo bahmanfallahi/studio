@@ -31,20 +31,20 @@ export async function seedDatabase() {
     const batch = writeBatch(db);
 
     // Seed users
-    users.forEach((user) => {
-      const docRef = doc(db, "users", user.id.toString());
+    users.forEach((user, index) => {
+      const docRef = doc(db, "users", (index + 1).toString());
       batch.set(docRef, user);
     });
 
     // Seed products
-    products.forEach((product) => {
-      const docRef = doc(db, "products", product.id.toString());
+    products.forEach((product, index) => {
+      const docRef = doc(db, "products", (index + 1).toString());
       batch.set(docRef, product);
     });
 
     // Seed coupons
-    coupons.forEach((coupon) => {
-      const docRef = doc(db, "coupons", coupon.id.toString());
+    coupons.forEach((coupon, index) => {
+      const docRef = doc(db, "coupons", (index + 1).toString());
       batch.set(docRef, coupon);
     });
 

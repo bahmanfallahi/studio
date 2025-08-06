@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             throw new Error('Invalid username or password');
         }
 
-        const foundUser = { id: parseInt(querySnapshot.docs[0].id), ...querySnapshot.docs[0].data() } as User;
+        const foundUser = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as User;
         setUser(foundUser);
         localStorage.setItem('coupon_crafter_user', JSON.stringify(foundUser));
 

@@ -12,8 +12,8 @@ import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
 
 const OptimizeDiscountInputSchema = z.object({
-  productId: z.number().describe('The ID of the product for which to optimize the discount.'),
-  salesAgentId: z.number().describe('The ID of the sales agent.'),
+  productId: z.string().describe('The ID of the product for which to optimize the discount.'),
+  salesAgentId: z.string().describe('The ID of the sales agent.'),
   salesAgentPerformance: z
     .number()
     .describe('The recent sales performance of the sales agent (e.g., number of sales in the last month).'),

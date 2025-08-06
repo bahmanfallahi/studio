@@ -144,7 +144,7 @@ export default function ProductsPage() {
       try {
         const productsCollection = collection(db, "products");
         const productsSnapshot = await getDocs(productsCollection);
-        const productsList = productsSnapshot.docs.map(doc => ({ id: parseInt(doc.id), ...doc.data() } as Product));
+        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
         setProducts(productsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
       } catch (error) {
         toast({
@@ -164,7 +164,7 @@ export default function ProductsPage() {
     try {
       if (productData.id) {
         // Edit
-        const productRef = doc(db, "products", productData.id.toString());
+        const productRef = doc(db, "products", productData.id);
         await setDoc(productRef, productData, { merge: true });
         setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } as Product : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
@@ -175,7 +175,7 @@ export default function ProductsPage() {
           created_at: new Date().toISOString(),
         };
         const docRef = await addDoc(collection(db, "products"), newProductData);
-        const newProduct: Product = { ...newProductData, id: parseInt(docRef.id) } as Product
+        const newProduct: Product = { ...newProductData, id: docRef.id } as Product
         setProducts([newProduct, ...products]);
         toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
       }
@@ -188,9 +188,9 @@ export default function ProductsPage() {
     }
   };
 
-  const handleDelete = async (productId: number) => {
+  const handleDelete = async (productId: string) => {
     try {
-        await deleteDoc(doc(db, "products", productId.toString()));
+        await deleteDoc(doc(db, "products", productId));
         setProducts(products.filter(p => p.id !== productId));
         toast({ title: "Product Deleted", description: `The product has been removed.` });
     } catch (error) {

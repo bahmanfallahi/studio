@@ -66,7 +66,7 @@ export default function CreateCouponForm({
     expires_at.setDate(expires_at.getDate() + data.expires_in_days);
 
     const newCouponData: Omit<Coupon, 'id'|'created_at'|'code'> = {
-      product_id: parseInt(data.product_id, 10),
+      product_id: data.product_id,
       discount_percent: data.discount_percent,
       expires_at: expires_at.toISOString(),
       note: data.note || '',
@@ -117,7 +117,7 @@ export default function CreateCouponForm({
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((product) => (
-                      <SelectItem key={product.id} value={product.id.toString()}>
+                      <SelectItem key={product.id} value={product.id}>
                         {product.name}
                       </SelectItem>
                     ))}
