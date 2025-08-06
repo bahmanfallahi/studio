@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { PlusCircle, Filter, LoaderCircle } from 'lucide-react';
+import { PlusCircle, Filter, LoaderCircle, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -21,12 +22,24 @@ import {
 } from '@/components/ui/table';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuCheckboxItem,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/auth-provider';
 import { User, Coupon, Product } from '@/lib/data';
@@ -34,7 +47,7 @@ import CreateCouponForm from '@/components/coupons/create-coupon-form';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, query, where, doc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 export default function CouponsPage() {
   const { user } = useAuth();
@@ -135,6 +148,29 @@ export default function CouponsPage() {
         console.error("Error adding coupon: ", error);
         return false;
       }
+  };
+
+  const handleDisable = async (couponId: string) => {
+    try {
+      const couponRef = doc(db, "coupons", couponId);
+      await updateDoc(couponRef, { status: "expired" });
+      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status: 'expired' } : c));
+      toast({ title: "Coupon Disabled", description: "The coupon has been marked as expired." });
+    } catch (error) {
+      console.error("Error disabling coupon:", error);
+      toast({ variant: "destructive", title: "Update Failed", description: "Could not disable the coupon." });
+    }
+  };
+
+  const handleDelete = async (couponId: string) => {
+    try {
+      await deleteDoc(doc(db, "coupons", couponId));
+      setCoupons(prev => prev.filter(c => c.id !== couponId));
+      toast({ title: "Coupon Deleted", description: "The coupon has been permanently removed." });
+    } catch (error) {
+      console.error("Error deleting coupon:", error);
+      toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the coupon." });
+    }
   };
 
   if (loading || !user) return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
@@ -261,10 +297,45 @@ export default function CouponsPage() {
                           )}
                         </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => handleCopy(coupon.code)}>
-                          <span className="sr-only">Copy Link</span>
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path></svg>
-                        </Button>
+                        <AlertDialog>
+                           <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <span className="sr-only">Open menu</span>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleCopy(coupon.code)}>
+                                Copy Link
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleDisable(coupon.id)}
+                                disabled={coupon.status !== 'active'}
+                              >
+                                Disable
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                               <AlertDialogTrigger asChild>
+                                <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
+                              </AlertDialogTrigger>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the coupon
+                                from the database.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(coupon.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </TableCell>
                     </TableRow>
                   );
