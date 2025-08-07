@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -134,7 +132,7 @@ export default function CouponsPage() {
   }, [coupons, user, statusFilter, agentFilter]);
 
   const addCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
-      const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ')[0].toUpperCase() || 'COUPON';
+      const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ').join('').toUpperCase() || 'COUPON';
       const newCoupon: Omit<Coupon, 'id'> = {
         ...newCouponData,
         code: `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
