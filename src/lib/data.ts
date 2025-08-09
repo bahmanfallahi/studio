@@ -5,6 +5,7 @@ export type User = {
   password_hash: string;
   role: 'sales' | 'manager';
   created_at: string;
+  coupon_limit_per_month: number;
 };
 
 export type Product = {
@@ -35,6 +36,7 @@ export const users: Omit<User, 'id'>[] = [
     password_hash: 'password',
     role: 'sales',
     created_at: '2023-01-15T09:30:00Z',
+    coupon_limit_per_month: 10,
   },
   {
     full_name: 'Maria Garcia',
@@ -42,6 +44,7 @@ export const users: Omit<User, 'id'>[] = [
     password_hash: 'password',
     role: 'sales',
     created_at: '2023-01-20T11:00:00Z',
+    coupon_limit_per_month: 15,
   },
   {
     full_name: 'Jane Doe',
@@ -49,6 +52,7 @@ export const users: Omit<User, 'id'>[] = [
     password_hash: 'password',
     role: 'manager',
     created_at: '2023-01-10T08:00:00Z',
+    coupon_limit_per_month: 999, // Managers have a high limit
   },
 ];
 

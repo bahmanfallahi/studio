@@ -65,14 +65,15 @@ function UserForm({
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<User>>(
-    user || { full_name: '', username: '', role: 'sales', password_hash: '' }
+    user || { full_name: '', username: '', role: 'sales', password_hash: '', coupon_limit_per_month: 10 }
   );
   const [isSaving, setIsSaving] = useState(false);
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    const { name, value, type } = e.target;
+    const isNumber = type === 'number';
+    setFormData((prev) => ({ ...prev, [name]: isNumber ? parseInt(value, 10) : value }));
   };
 
   const handleRoleChange = (value: 'sales' | 'manager') => {
@@ -124,6 +125,10 @@ function UserForm({
                 <SelectItem value="manager">Sales Manager</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+           <div>
+            <Label htmlFor="coupon_limit_per_month">Monthly Coupon Limit</Label>
+            <Input id="coupon_limit_per_month" name="coupon_limit_per_month" type="number" value={formData.coupon_limit_per_month || 10} onChange={handleChange} required/>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
@@ -188,6 +193,7 @@ export default function UsersPage() {
            username: userData.username!,
            role: userData.role!,
            password_hash: userData.password_hash!,
+           coupon_limit_per_month: userData.coupon_limit_per_month || 10,
            created_at: new Date().toISOString(),
          };
          const docRef = await addDoc(collection(db, "users"), newUserData);
@@ -242,7 +248,7 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold font-headline tracking-tight">Users</h1>
           <p className="text-muted-foreground">Manage your team of sales agents and managers.</p>
         </div>
-        <Button onClick={() => setEditingUser({ full_name: '', username: '', role: 'sales' })}>
+        <Button onClick={() => setEditingUser({ full_name: '', username: '', role: 'sales', coupon_limit_per_month: 10 })}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add User
         </Button>
       </div>
@@ -260,6 +266,7 @@ export default function UsersPage() {
                 <TableHead>Full Name</TableHead>
                 <TableHead>Username</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Coupon Limit</TableHead>
                 <TableHead>Created At</TableHead>
                 <TableHead>
                   <span className="sr-only">Actions</span>
@@ -276,6 +283,7 @@ export default function UsersPage() {
                       {user.role}
                     </Badge>
                   </TableCell>
+                  <TableCell>{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
                   <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <AlertDialog>

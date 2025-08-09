@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -20,6 +20,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Product, User, Coupon } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
 import { LoaderCircle } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 
 const couponSchema = z.object({
   product_id: z.string().min(1, 'Product is required'),
@@ -47,6 +49,9 @@ export default function CreateCouponForm({
 }: CreateCouponFormProps) {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [canCreate, setCanCreate] = useState(true);
+  const [couponsThisMonth, setCouponsThisMonth] = useState(0);
+
   const {
     control,
     handleSubmit,
@@ -60,7 +65,49 @@ export default function CreateCouponForm({
     }
   });
 
+  useEffect(() => {
+    if (!isOpen || user.role === 'manager') {
+      setCanCreate(true);
+      return;
+    }
+
+    const checkCouponLimit = async () => {
+      const now = new Date();
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfMonthTimestamp = Timestamp.fromDate(startOfMonth);
+
+      const couponsRef = collection(db, "coupons");
+      const q = query(
+        couponsRef,
+        where("user_id", "==", user.id),
+        where("created_at", ">=", startOfMonthTimestamp.toDate().toISOString())
+      );
+
+      try {
+        const querySnapshot = await getDocs(q);
+        const count = querySnapshot.size;
+        setCouponsThisMonth(count);
+        setCanCreate(count < user.coupon_limit_per_month);
+      } catch (error) {
+        console.error("Error checking coupon limit:", error);
+        // Default to allowing creation if there's an error
+        setCanCreate(true);
+      }
+    };
+    checkCouponLimit();
+  }, [isOpen, user]);
+
+
   const onSubmit = async (data: CouponFormData) => {
+    if (!canCreate && user.role !== 'manager') {
+       toast({
+        variant: 'destructive',
+        title: 'Limit Reached',
+        description: `You have reached your monthly limit of ${user.coupon_limit_per_month} coupons.`,
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     const expires_at = new Date();
     expires_at.setDate(expires_at.getDate() + data.expires_in_days);
@@ -101,6 +148,11 @@ export default function CreateCouponForm({
           <DialogDescription>
             Fill out the details below to generate a new discount coupon.
           </DialogDescription>
+           {user.role === 'sales' && (
+            <div className="pt-2 text-sm text-muted-foreground">
+              Your monthly limit: {couponsThisMonth} / {user.coupon_limit_per_month} coupons created.
+            </div>
+          )}
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
@@ -176,7 +228,7 @@ export default function CreateCouponForm({
             />
           </div>
           <DialogFooter>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting || !canCreate}>
               {isSubmitting && <LoaderCircle className="animate-spin mr-2"/>}
               {isSubmitting ? 'Creating...' : 'Create Coupon'}
             </Button>

@@ -23,6 +23,7 @@ import {
   Menu,
   Sparkles,
   User as UserIcon,
+  Settings,
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -94,6 +95,7 @@ function SidebarNav({ user }: { user: User }) {
           <NavLink href="/dashboard/products" icon={Package}>Products</NavLink>
           <NavLink href="/dashboard/users" icon={Users}>Users</NavLink>
           <NavLink href="/dashboard/optimize" icon={Sparkles}>AI Optimizer</NavLink>
+          <NavLink href="/dashboard/settings" icon={Settings}>Settings</NavLink>
         </>
       )}
     </nav>
