@@ -66,39 +66,40 @@ export default function CreateCouponForm({
   });
 
   useEffect(() => {
-    if (!isOpen || user.role === 'manager') {
-      setCanCreate(true);
-      return;
+    if (!isOpen) return;
+
+    // Reset check when dialog opens for sales agents
+    if(user.role === 'sales') {
+      const checkCouponLimit = async () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        
+        const couponsRef = collection(db, "coupons");
+        const q = query(
+          couponsRef,
+          where("user_id", "==", user.id),
+          where("created_at", ">=", startOfMonth.toISOString())
+        );
+
+        try {
+          const querySnapshot = await getDocs(q);
+          const count = querySnapshot.size;
+          setCouponsThisMonth(count);
+          setCanCreate(count < user.coupon_limit_per_month);
+        } catch (error) {
+          console.error("Error checking coupon limit:", error);
+          setCanCreate(true); // Default to allowing creation if there's an error
+        }
+      };
+      checkCouponLimit();
+    } else {
+      setCanCreate(true); // Managers can always create
     }
-
-    const checkCouponLimit = async () => {
-      const now = new Date();
-      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      const startOfMonthTimestamp = Timestamp.fromDate(startOfMonth);
-
-      const couponsRef = collection(db, "coupons");
-      const q = query(
-        couponsRef,
-        where("user_id", "==", user.id),
-        where("created_at", ">=", startOfMonthTimestamp.toDate().toISOString())
-      );
-
-      try {
-        const querySnapshot = await getDocs(q);
-        const count = querySnapshot.size;
-        setCouponsThisMonth(count);
-        setCanCreate(count < user.coupon_limit_per_month);
-      } catch (error) {
-        console.error("Error checking coupon limit:", error);
-        // Default to allowing creation if there's an error
-        setCanCreate(true);
-      }
-    };
-    checkCouponLimit();
   }, [isOpen, user]);
 
 
   const onSubmit = async (data: CouponFormData) => {
+    // Re-check just before submission to be safe
     if (!canCreate && user.role !== 'manager') {
        toast({
         variant: 'destructive',
