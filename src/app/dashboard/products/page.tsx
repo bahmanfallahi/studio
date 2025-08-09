@@ -62,7 +62,7 @@ function ProductForm({
   onClose,
 }: {
   product: Partial<Product> | null;
-  onSave: (product: Partial<Product>) => Promise<boolean>;
+  onSave: (product: Product) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<Product>>(
@@ -83,7 +83,7 @@ function ProductForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    const success = await onSave(formData);
+    const success = await onSave(formData as Product);
     setIsSaving(false);
     if (success) {
       onClose();
@@ -160,13 +160,13 @@ export default function ProductsPage() {
     fetchProducts();
   }, [toast]);
 
-  const handleSave = async (productData: Partial<Product>) => {
+  const handleSave = async (productData: Product) => {
     try {
       if (productData.id) {
         // Edit
         const productRef = doc(db, "products", productData.id);
         await setDoc(productRef, productData, { merge: true });
-        setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } as Product : p));
+        setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } : p));
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
         // Add
