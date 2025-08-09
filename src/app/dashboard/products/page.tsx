@@ -170,13 +170,16 @@ export default function ProductsPage() {
         toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
       } else {
         // Add
-        const newProductData = {
-          ...productData,
+        const newProductData: Omit<Product, 'id'> = {
+          name: productData.name!,
+          description: productData.description!,
+          price: productData.price!,
+          is_active: productData.is_active!,
           created_at: new Date().toISOString(),
         };
         const docRef = await addDoc(collection(db, "products"), newProductData);
-        const newProduct: Product = { ...newProductData, id: docRef.id } as Product
-        setProducts([newProduct, ...products]);
+        const newProduct: Product = { ...newProductData, id: docRef.id }
+        setProducts(prev => [newProduct, ...prev]);
         toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
       }
       setEditingProduct(null);
