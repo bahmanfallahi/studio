@@ -183,12 +183,15 @@ export default function UsersPage() {
          toast({ title: 'User Updated', description: `${userData.full_name}'s profile has been updated.` });
        } else {
          // Add
-         const newUserData = {
-           ...userData,
+         const newUserData: Omit<User, 'id'> = {
+           full_name: userData.full_name!,
+           username: userData.username!,
+           role: userData.role!,
+           password_hash: userData.password_hash!,
            created_at: new Date().toISOString(),
          };
          const docRef = await addDoc(collection(db, "users"), newUserData);
-         const newUser: User = { ...newUserData, id: docRef.id } as User;
+         const newUser: User = { ...newUserData, id: docRef.id };
          setUsers([newUser, ...users]);
          toast({ title: 'User Added', description: `${newUser.full_name} has been added to the system.` });
        }
