@@ -226,7 +226,7 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold font-headline tracking-tight">Products</h1>
           <p className="text-muted-foreground">Manage your inventory of modems and other products.</p>
         </div>
-        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true })}>
+        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true, created_at: new Date().toISOString() })}>
           <PlusCircle className="mr-2 h-4 w-4" /> Add Product
         </Button>
       </div>
@@ -284,7 +284,7 @@ export default function ProductsPage() {
                             <AlertDialogDescription>
                               This action cannot be undone. This will permanently delete the product
                               and may affect existing coupons.
-                            </AlertDialogDescription>
+                            </Description>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
