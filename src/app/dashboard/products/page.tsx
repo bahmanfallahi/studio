@@ -83,7 +83,9 @@ function ProductForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    const success = await onSave(formData as Product);
+    // Ensure the ID is passed along for updates
+    const dataToSave = { ...product, ...formData };
+    const success = await onSave(dataToSave as Product);
     setIsSaving(false);
     if (success) {
       onClose();
