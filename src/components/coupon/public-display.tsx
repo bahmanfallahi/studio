@@ -22,7 +22,7 @@ export default function PublicCouponDisplay({ coupon, product }: { coupon: Coupo
             <Image 
                 src="https://placehold.co/600x400"
                 alt={product.name}
-                layout="fill"
+                fill={true}
                 objectFit="cover"
                 data-ai-hint="modem technology"
              />
