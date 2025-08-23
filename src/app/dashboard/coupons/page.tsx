@@ -46,7 +46,7 @@ import CreateCouponForm from '@/components/coupons/create-coupon-form';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, query, where, doc, getDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, query, where, doc, getDoc, updateDoc, deleteDoc, DocumentData, Query } from 'firebase/firestore';
 
 export default function CouponsPage() {
   const { user } = useAuth();
@@ -75,15 +75,22 @@ export default function CouponsPage() {
         const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
         setProducts(productsList);
 
-        // Fetch all users
-        const usersCollection = collection(db, "users");
-        const usersSnapshot = await getDocs(usersCollection);
-        const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-        setUsers(usersList);
+        // Fetch users (only managers can see all users)
+        if (user.role === 'manager') {
+          const usersCollection = collection(db, "users");
+          const usersSnapshot = await getDocs(usersCollection);
+          const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+          setUsers(usersList);
+        } else {
+          setUsers([user]); // Agent only sees themselves
+        }
 
         // Fetch coupons
-        const couponsCollection = collection(db, "coupons");
-        const couponsSnapshot = await getDocs(couponsCollection);
+        let couponsQuery: Query<DocumentData> = collection(db, "coupons");
+        if (user.role !== 'manager') {
+            couponsQuery = query(couponsQuery, where("user_id", "==", user.id));
+        }
+        const couponsSnapshot = await getDocs(couponsQuery);
         const couponsList = couponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
         setCoupons(couponsList);
 
@@ -120,7 +127,7 @@ export default function CouponsPage() {
   };
 
   const filteredCoupons = useMemo(() => {
-    let result = user?.role === 'manager' ? coupons : coupons.filter(c => c.user_id === user?.id);
+    let result = coupons; // Already pre-filtered by role in useEffect
 
     if (statusFilter.length > 0) {
       result = result.filter(c => statusFilter.includes(c.status));
@@ -148,18 +155,19 @@ export default function CouponsPage() {
         return false;
       }
   };
-
-  const handleDisable = async (couponId: string) => {
+  
+  const handleUpdateStatus = async (couponId: string, status: 'expired' | 'used') => {
     try {
       const couponRef = doc(db, "coupons", couponId);
-      await updateDoc(couponRef, { status: "expired" });
-      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status: 'expired' } : c));
-      toast({ title: "Coupon Disabled", description: "The coupon has been marked as expired." });
+      await updateDoc(couponRef, { status });
+      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status } : c));
+      toast({ title: `Coupon ${status.charAt(0).toUpperCase() + status.slice(1)}`, description: `The coupon has been marked as ${status}.` });
     } catch (error) {
-      console.error("Error disabling coupon:", error);
-      toast({ variant: "destructive", title: "Update Failed", description: "Could not disable the coupon." });
+      console.error(`Error updating coupon to ${status}:`, error);
+      toast({ variant: "destructive", title: "Update Failed", description: `Could not update the coupon.` });
     }
   };
+
 
   const handleDelete = async (couponId: string) => {
     try {
@@ -310,7 +318,13 @@ export default function CouponsPage() {
                                 Copy Link
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleDisable(coupon.id)}
+                                onClick={() => handleUpdateStatus(coupon.id, 'used')}
+                                disabled={coupon.status !== 'active'}
+                              >
+                                Mark as Used
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => handleUpdateStatus(coupon.id, 'expired')}
                                 disabled={coupon.status !== 'active'}
                               >
                                 Disable

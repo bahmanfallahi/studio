@@ -2,14 +2,15 @@
 import { useState, useEffect } from 'react';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Ticket, Clock, CheckCircle, Users, LoaderCircle } from 'lucide-react';
+import { Ticket, Clock, CheckCircle, Users, LoaderCircle, AlertTriangle } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Coupon, User } from '@/lib/data';
-import { subMonths, format, startOfMonth } from 'date-fns';
+import { subMonths, format, startOfMonth, addMonths } from 'date-fns';
 
 export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({
     totalCoupons: 0,
     usageRate: 0,
@@ -21,6 +22,7 @@ export default function ManagerDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setError(null);
       try {
         const couponsSnapshot = await getDocs(collection(db, "coupons"));
         const coupons = couponsSnapshot.docs.map(doc => doc.data() as Coupon);
@@ -64,8 +66,9 @@ export default function ManagerDashboard() {
 
         setChartData(formattedChartData);
 
-      } catch (error) {
-        console.error("Error fetching manager dashboard data: ", error);
+      } catch (err) {
+        console.error("Error fetching manager dashboard data: ", err);
+        setError("Could not load dashboard data. Please try again later.");
       }
       setLoading(false);
     };
@@ -77,6 +80,16 @@ export default function ManagerDashboard() {
     return (
         <div className="flex items-center justify-center h-full">
             <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
+        </div>
+    )
+  }
+
+  if (error) {
+     return (
+        <div className="flex flex-col items-center justify-center h-64 bg-destructive/10 rounded-lg">
+            <AlertTriangle className="h-10 w-10 text-destructive mb-4" />
+            <h2 className="text-xl font-semibold text-destructive">An Error Occurred</h2>
+            <p className="text-muted-foreground">{error}</p>
         </div>
     )
   }
@@ -164,9 +177,4 @@ export default function ManagerDashboard() {
       </Card>
     </div>
   );
-}
-function addMonths(date: Date, months: number) {
-    const d = new Date(date);
-    d.setMonth(d.getMonth() + months);
-    return d;
 }

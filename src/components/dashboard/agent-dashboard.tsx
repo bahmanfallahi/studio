@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PlusCircle, Ticket, Clock, CheckCircle, Copy, LoaderCircle } from 'lucide-react';
+import { PlusCircle, Ticket, Clock, CheckCircle, Copy, LoaderCircle, AlertTriangle } from 'lucide-react';
 import { User, Coupon } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,17 +16,25 @@ export default function AgentDashboard({ user }: { user: User }) {
   const { toast } = useToast();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, active: 0, used: 0 });
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       if (!user) return;
       setLoading(true);
+      setError(null);
       try {
-        // Fetch all coupons for stats
         const allCouponsRef = collection(db, "coupons");
         const allCouponsQuery = query(allCouponsRef, where("user_id", "==", user.id));
         const allCouponsSnapshot = await getDocs(allCouponsQuery);
+        
+        if (allCouponsSnapshot.empty && (allCouponsSnapshot.metadata.fromCache)) {
+             setError("Could not load dashboard data. Please check your network connection and try again.");
+             setLoading(false);
+             return;
+        }
+
         const allCouponsList = allCouponsSnapshot.docs.map(doc => doc.data() as Coupon);
 
         setStats({
@@ -46,21 +54,12 @@ export default function AgentDashboard({ user }: { user: User }) {
         const recentCouponsList = recentCouponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
         setCoupons(recentCouponsList);
 
-      } catch (error) {
-        console.error("Failed to fetch coupons: ", error);
-        if ((error as any).code === 'failed-precondition') {
-             toast({
-              variant: 'destructive',
-              title: 'Database Index Required',
-              description: 'Please ask the administrator to create the necessary Firestore index to view your coupons.',
-              duration: 10000
-            });
+      } catch (err) {
+        console.error("Failed to fetch coupons: ", err);
+        if ((err as any).code === 'failed-precondition') {
+             setError('A database index is required. Please ask the administrator to create the necessary Firestore index.');
         } else {
-            toast({
-              variant: 'destructive',
-              title: 'Error',
-              description: 'Could not fetch recent coupons.'
-            });
+            setError('Could not fetch recent coupons. Please try again later.');
         }
       }
       setLoading(false);
@@ -76,6 +75,14 @@ export default function AgentDashboard({ user }: { user: User }) {
       description: `URL for coupon ${code} is ready to be shared.`,
     });
   };
+
+  if (loading) {
+    return (
+        <div className="flex items-center justify-center h-full">
+            <LoaderCircle className="h-10 w-10 animate-spin text-primary" />
+        </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -96,6 +103,13 @@ export default function AgentDashboard({ user }: { user: User }) {
         </CardContent>
       </Card>
       
+      {error ? (
+         <div className="flex flex-col items-center justify-center h-40 bg-destructive/10 rounded-lg">
+            <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
+            <h3 className="font-semibold text-destructive">Could not load stats</h3>
+            <p className="text-sm text-muted-foreground text-center px-4">{error}</p>
+        </div>
+      ) : (
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -128,6 +142,7 @@ export default function AgentDashboard({ user }: { user: User }) {
           </CardContent>
         </Card>
       </div>
+      )}
 
        <Card>
         <CardHeader>
@@ -135,11 +150,6 @@ export default function AgentDashboard({ user }: { user: User }) {
            <CardDescription>A quick look at the last 5 coupons you created.</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <LoaderCircle className="h-8 w-8 animate-spin text-primary" />
-            </div>
-          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -180,13 +190,12 @@ export default function AgentDashboard({ user }: { user: User }) {
               )) : (
                  <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
-                    No recent coupons found.
+                    {error ? 'Could not load recent coupons.' : 'No recent coupons found.'}
                   </TableCell>
                 </TableRow>
               )}
             </TableBody>
           </Table>
-          )}
         </CardContent>
       </Card>
     </div>
