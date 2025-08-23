@@ -178,7 +178,6 @@ export default function ProductsPage() {
           created_at: new Date().toISOString(),
         };
         const docRef = await addDoc(collection(db, "products"), newProductData);
-        // Correctly use the string ID from the docRef
         const newProduct: Product = { ...newProductData, id: docRef.id };
         setProducts(prev => [newProduct, ...prev]);
         toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
