@@ -283,7 +283,7 @@ export default function ProductsPage() {
                             <AlertDialogDescription>
                               This action cannot be undone. This will permanently delete the product
                               and may affect existing coupons.
-                            </Description>
+                            </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
