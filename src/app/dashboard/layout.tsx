@@ -127,14 +127,21 @@ export default function DashboardLayout({
     );
   }
   
+  const AppHeader = () => (
+     <Link href="/dashboard" className="flex items-center gap-2">
+        <Ticket className="h-8 w-8 text-primary" />
+        <div className="flex flex-col">
+            <span className="font-headline font-semibold text-lg">موپن</span>
+            <span className="text-xs text-muted-foreground whitespace-nowrap">از پیگیری تا حصول نتیجه، فقط با یک کوپن</span>
+        </div>
+    </Link>
+  );
+
   const SidebarContent = () => (
     <>
       <div className="flex h-full max-h-screen flex-col gap-2">
           <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
-            <Link href="/dashboard" className="flex items-center gap-2 font-headline font-semibold">
-              <Ticket className="h-6 w-6 text-primary" />
-              <span className="">موپن</span>
-            </Link>
+            <AppHeader />
           </div>
           <div className="flex-1">
             <div className="grid items-start p-4">
@@ -168,10 +175,7 @@ export default function DashboardLayout({
             </SheetContent>
           </Sheet>
           <div className="w-full flex-1">
-             <Link href="/dashboard" className="flex items-center gap-2 font-headline font-semibold">
-              <Ticket className="h-6 w-6 text-primary" />
-              <span className="">موپن</span>
-            </Link>
+             <AppHeader />
           </div>
         </header>
         <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
