@@ -96,9 +96,6 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <DbTester />
       </div>
-      <footer className="mt-8 text-sm text-muted-foreground">
-        <p>پس از سید کردن دیتابیس، از `sales_agent_1` / `password` یا `sales_manager` / `password` استفاده کنید</p>
-      </footer>
     </main>
   );
 }
