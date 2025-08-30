@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { Coupon, User } from '@/lib/data';
 import { subMonths, format, startOfMonth, addMonths } from 'date-fns';
-import { fa } from 'date-fns/locale';
+import { faIR } from 'date-fns/locale';
 
 export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
@@ -43,14 +43,14 @@ export default function ManagerDashboard() {
         const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
         for (let i = 0; i < 6; i++) {
-            const month = format(addMonths(sixMonthsAgo, i), 'MMM', { locale: fa });
+            const month = format(addMonths(sixMonthsAgo, i), 'MMM', { locale: faIR });
             monthlyData[month] = { created: 0, used: 0 };
         }
 
         coupons.forEach(coupon => {
             const createdAt = new Date(coupon.created_at);
             if (createdAt >= sixMonthsAgo) {
-                const month = format(createdAt, 'MMM', { locale: fa });
+                const month = format(createdAt, 'MMM', { locale: faIR });
                 if (monthlyData[month]) {
                     monthlyData[month].created++;
                     if (coupon.status === 'used') {
