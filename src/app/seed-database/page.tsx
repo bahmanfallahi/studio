@@ -22,26 +22,26 @@ export default function SeedPage() {
         <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
             <Card className="w-full max-w-lg">
                 <CardHeader>
-                    <CardTitle className="text-2xl font-headline">Seed Firestore Database</CardTitle>
+                    <CardTitle className="text-2xl font-headline">پر کردن پایگاه داده Firestore</CardTitle>
                     <CardDescription>
-                        Click the button below to populate your Firestore database with initial data (users, products, coupons). This is a one-time operation.
+                        برای پر کردن پایگاه داده Firestore خود با داده‌های اولیه (کاربران، محصولات، کوپن‌ها) روی دکمه زیر کلیک کنید. این یک عملیات یک‌باره است.
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button onClick={handleSeed} disabled={loading || result?.success === true} className="w-full">
-                        {loading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                        {loading ? 'Seeding...' : 'Start Seeding'}
+                        {loading && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+                        {loading ? 'در حال پر کردن...' : 'شروع عملیات'}
                     </Button>
 
                     {result && (
                         <div className={`mt-4 p-4 rounded-md flex items-start space-x-3 ${result.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                             {result.success ? <CheckCircle className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
                             <div>
-                                <p className="font-semibold">{result.success ? 'Success!' : 'Error'}</p>
+                                <p className="font-semibold">{result.success ? 'موفقیت!' : 'خطا'}</p>
                                 <p className="text-sm">{result.message}</p>
                                 {result.success && (
                                      <Button asChild variant="link" className="p-0 h-auto mt-2 text-green-800">
-                                        <Link href="/">Go to Login Page</Link>
+                                        <Link href="/">رفتن به صفحه ورود</Link>
                                     </Button>
                                 )}
                             </div>

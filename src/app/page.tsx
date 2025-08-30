@@ -32,14 +32,14 @@ export default function LoginPage() {
     try {
       await login(username, password);
       toast({
-        title: 'Login Successful',
-        description: "Welcome back!",
+        title: 'ورود موفقیت‌آمیز',
+        description: "خوش آمدید!",
       });
       // The useEffect will handle the redirect
     } catch (error) {
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
+        title: 'ورود ناموفق',
         description: (error as Error).message,
       });
       setIsLoading(false);
@@ -52,18 +52,18 @@ export default function LoginPage() {
         <div className="bg-primary text-primary-foreground rounded-full p-4 mb-4">
           <Ticket className="h-12 w-12" />
         </div>
-        <h1 className="text-5xl font-headline font-bold text-primary">CouponCrafter</h1>
-        <p className="text-muted-foreground mt-2">The ultimate tool for fiber sales teams.</p>
+        <h1 className="text-5xl font-headline font-bold text-primary">کوپن‌کرافتر</h1>
+        <p className="text-muted-foreground mt-2">ابزار نهایی برای تیم‌های فروش فیبر نوری.</p>
       </div>
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader>
-          <CardTitle className="text-2xl font-headline">Login</CardTitle>
-          <CardDescription>Enter your credentials to access your dashboard.</CardDescription>
+          <CardTitle className="text-2xl font-headline">ورود</CardTitle>
+          <CardDescription>برای دسترسی به داشبورد، اطلاعات کاربری خود را وارد کنید.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Username (Email)</Label>
+              <Label htmlFor="username">نام کاربری (ایمیل)</Label>
               <Input
                 id="username"
                 type="text"
@@ -75,7 +75,7 @@ export default function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">رمز عبور</Label>
               <Input
                 id="password"
                 type="password"
@@ -87,8 +87,8 @@ export default function LoginPage() {
               />
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-              {isLoading ? 'Signing In...' : 'Sign In'}
+              {isLoading && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+              {isLoading ? 'در حال ورود...' : 'ورود'}
             </Button>
           </form>
         </CardContent>
@@ -97,7 +97,7 @@ export default function LoginPage() {
         <DbTester />
       </div>
       <footer className="mt-8 text-sm text-muted-foreground">
-        <p>After seeding DB, use: `sales_agent_1` / `password` or `sales_manager` / `password`</p>
+        <p>پس از سید کردن دیتابیس، از `sales_agent_1` / `password` یا `sales_manager` / `password` استفاده کنید</p>
       </footer>
     </main>
   );

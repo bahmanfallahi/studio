@@ -39,7 +39,7 @@ export default function SettingsPage() {
 
       } catch (error) {
         console.error("Error fetching sales agents:", error);
-        toast({ variant: 'destructive', title: 'Error', description: 'Could not fetch sales agents.' });
+        toast({ variant: 'destructive', title: 'خطا', description: 'امکان دریافت لیست نمایندگان فروش وجود نداشت.' });
       }
       setLoading(false);
     };
@@ -71,10 +71,10 @@ export default function SettingsPage() {
         coupon_limit_per_month: limits[agent.id],
       })));
 
-      toast({ title: 'Success', description: 'Coupon limits have been updated.' });
+      toast({ title: 'موفقیت', description: 'سقف کوپن‌ها با موفقیت به‌روز شد.' });
     } catch (error) {
       console.error("Error saving limits:", error);
-      toast({ variant: 'destructive', title: 'Save Failed', description: 'Could not update the limits.' });
+      toast({ variant: 'destructive', title: 'ذخیره ناموفق', description: 'امکان به‌روزرسانی سقف‌ها وجود نداشت.' });
     }
     setIsSaving(false);
   };
@@ -82,8 +82,8 @@ export default function SettingsPage() {
   if (currentUser?.role !== 'manager') {
     return (
       <div className="text-center py-10">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>
+        <p className="text-muted-foreground">شما اجازه مشاهده این صفحه را ندارید.</p>
       </div>
     );
   }
@@ -100,27 +100,27 @@ export default function SettingsPage() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Settings</h1>
-          <p className="text-muted-foreground">Manage application settings and agent permissions.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">تنظیمات</h1>
+          <p className="text-muted-foreground">تنظیمات برنامه و مجوزهای نمایندگان را مدیریت کنید.</p>
         </div>
         <Button onClick={handleSaveChanges} disabled={isSaving}>
-            {isSaving ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-            {isSaving ? 'Saving...' : 'Save Changes'}
+            {isSaving ? <LoaderCircle className="ml-2 h-4 w-4 animate-spin" /> : <Save className="ml-2 h-4 w-4" />}
+            {isSaving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}
         </Button>
       </div>
       <Card>
         <CardHeader>
-          <CardTitle>Monthly Coupon Limits</CardTitle>
+          <CardTitle>سقف ماهانه کوپن‌ها</CardTitle>
           <CardDescription>
-            Set the maximum number of coupons each sales agent can create per calendar month.
+            حداکثر تعداد کوپن‌هایی که هر نماینده فروش می‌تواند در هر ماه تقویمی ایجاد کند را تنظیم کنید.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Sales Agent</TableHead>
-                <TableHead className="w-[200px]">Coupon Limit</TableHead>
+                <TableHead>نماینده فروش</TableHead>
+                <TableHead className="w-[200px]">سقف کوپن</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

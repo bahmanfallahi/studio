@@ -24,9 +24,9 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 
 const couponSchema = z.object({
-  product_id: z.string().min(1, 'Product is required'),
-  discount_percent: z.coerce.number().min(1, 'Discount must be at least 1%').max(100, 'Discount cannot exceed 100%'),
-  expires_in_days: z.coerce.number().min(1, 'Expiration must be at least 1 day'),
+  product_id: z.string().min(1, 'انتخاب محصول الزامی است'),
+  discount_percent: z.coerce.number().min(1, 'تخفیف باید حداقل ۱٪ باشد').max(100, 'تخفیف نمی‌تواند بیش از ۱۰۰٪ باشد'),
+  expires_in_days: z.coerce.number().min(1, 'انقضا باید حداقل ۱ روز باشد'),
   note: z.string().optional(),
 });
 
@@ -103,8 +103,8 @@ export default function CreateCouponForm({
     if (!canCreate && user.role !== 'manager') {
        toast({
         variant: 'destructive',
-        title: 'Limit Reached',
-        description: `You have reached your monthly limit of ${user.coupon_limit_per_month} coupons.`,
+        title: 'محدودیت ساخت کوپن',
+        description: `شما به سقف ماهانه ${user.coupon_limit_per_month} کوپن خود رسیده‌اید.`,
       });
       return;
     }
@@ -126,16 +126,16 @@ export default function CreateCouponForm({
     
     if (success) {
       toast({
-        title: 'Coupon Created!',
-        description: 'The new coupon has been added to your list.',
+        title: 'کوپن ساخته شد!',
+        description: 'کوپن جدید به لیست شما اضافه شد.',
       });
       setIsOpen(false);
       reset();
     } else {
        toast({
         variant: 'destructive',
-        title: 'Creation Failed',
-        description: 'Could not create the coupon. Please try again.',
+        title: 'ساخت ناموفق',
+        description: 'امکان ساخت کوپن وجود نداشت. لطفاً دوباره تلاش کنید.',
       });
     }
     setIsSubmitting(false);
@@ -145,28 +145,28 @@ export default function CreateCouponForm({
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle className="font-headline">Create New Coupon</DialogTitle>
+          <DialogTitle className="font-headline">ساخت کوپن جدید</DialogTitle>
           <DialogDescription>
-            Fill out the details below to generate a new discount coupon.
+            برای تولید کوپن تخفیف جدید، جزئیات زیر را پر کنید.
           </DialogDescription>
            {user.role === 'sales' && (
             <div className="pt-2 text-sm text-muted-foreground">
-              Your monthly limit: {couponsThisMonth} / {user.coupon_limit_per_month} coupons created.
+              سقف ماهانه شما: {couponsThisMonth} / {user.coupon_limit_per_month} کوپن ساخته شده.
             </div>
           )}
         </DialogHeader>
         <form onSubmit={handleSubmit(onSubmit)} className="grid gap-4 py-4">
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="product_id" className="text-right">
-              Product
+              محصول
             </Label>
             <Controller
               name="product_id"
               control={control}
               render={({ field }) => (
-                <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <Select onValueChange={field.onChange} defaultValue={field.value} dir="rtl">
                   <SelectTrigger className="col-span-3">
-                    <SelectValue placeholder="Select a product" />
+                    <SelectValue placeholder="یک محصول را انتخاب کنید" />
                   </SelectTrigger>
                   <SelectContent>
                     {products.map((product) => (
@@ -179,13 +179,13 @@ export default function CreateCouponForm({
               )}
             />
             {errors.product_id && (
-              <p className="col-span-4 text-red-500 text-sm text-right">{errors.product_id.message}</p>
+              <p className="col-span-4 text-red-500 text-sm text-left">{errors.product_id.message}</p>
             )}
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="discount_percent" className="text-right">
-              Discount (%)
+              تخفیف (%)
             </Label>
              <Controller
               name="discount_percent"
@@ -193,13 +193,13 @@ export default function CreateCouponForm({
               render={({ field }) => <Input {...field} id="discount_percent" type="number" className="col-span-3" />}
             />
             {errors.discount_percent && (
-              <p className="col-span-4 text-red-500 text-sm text-right">{errors.discount_percent.message}</p>
+              <p className="col-span-4 text-red-500 text-sm text-left">{errors.discount_percent.message}</p>
             )}
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="expires_in_days" className="text-right">
-              Expires in (days)
+              انقضا (روز)
             </Label>
             <Controller
               name="expires_in_days"
@@ -207,13 +207,13 @@ export default function CreateCouponForm({
               render={({ field }) => <Input {...field} id="expires_in_days" type="number" className="col-span-3" />}
             />
             {errors.expires_in_days && (
-              <p className="col-span-4 text-red-500 text-sm text-right">{errors.expires_in_days.message}</p>
+              <p className="col-span-4 text-red-500 text-sm text-left">{errors.expires_in_days.message}</p>
             )}
           </div>
 
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="note" className="text-right">
-              Note
+              یادداشت
             </Label>
             <Controller
               name="note"
@@ -222,7 +222,7 @@ export default function CreateCouponForm({
                 <Textarea
                   {...field}
                   id="note"
-                  placeholder="Optional: e.g., For Mr. Smith"
+                  placeholder="اختیاری: مثلاً برای آقای رضایی"
                   className="col-span-3"
                 />
               )}
@@ -230,8 +230,8 @@ export default function CreateCouponForm({
           </div>
           <DialogFooter>
             <Button type="submit" disabled={isSubmitting || !canCreate}>
-              {isSubmitting && <LoaderCircle className="animate-spin mr-2"/>}
-              {isSubmitting ? 'Creating...' : 'Create Coupon'}
+              {isSubmitting && <LoaderCircle className="animate-spin ml-2"/>}
+              {isSubmitting ? 'در حال ساخت...' : 'ساخت کوپن'}
             </Button>
           </DialogFooter>
         </form>

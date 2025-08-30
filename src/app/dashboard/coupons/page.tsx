@@ -98,8 +98,8 @@ export default function CouponsPage() {
         console.error("Error fetching data: ", error);
         toast({
           variant: 'destructive',
-          title: 'Error fetching data',
-          description: 'Could not load data from the database.',
+          title: 'خطا در دریافت اطلاعات',
+          description: 'امکان بارگذاری اطلاعات از پایگاه داده وجود نداشت.',
         });
       }
       setLoading(false);
@@ -121,8 +121,8 @@ export default function CouponsPage() {
     const url = `${window.location.origin}/coupon/${code}`;
     navigator.clipboard.writeText(url);
     toast({
-      title: 'Copied to clipboard!',
-      description: `URL for coupon ${code} is ready to be shared.`,
+      title: 'در کلیپ‌بورد کپی شد!',
+      description: `URL کوپن ${code} برای اشتراک‌گذاری آماده است.`,
     });
   };
 
@@ -161,10 +161,10 @@ export default function CouponsPage() {
       const couponRef = doc(db, "coupons", couponId);
       await updateDoc(couponRef, { status });
       setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status } : c));
-      toast({ title: `Coupon ${status.charAt(0).toUpperCase() + status.slice(1)}`, description: `The coupon has been marked as ${status}.` });
+      toast({ title: `کوپن ${status === 'used' ? 'استفاده شده' : 'منقضی'} شد`, description: `کوپن به عنوان ${status === 'used' ? 'استفاده شده' : 'منقضی'} علامت‌گذاری شد.` });
     } catch (error) {
       console.error(`Error updating coupon to ${status}:`, error);
-      toast({ variant: "destructive", title: "Update Failed", description: `Could not update the coupon.` });
+      toast({ variant: "destructive", title: "بروزرسانی ناموفق", description: `امکان بروزرسانی کوپن وجود نداشت.` });
     }
   };
 
@@ -173,28 +173,34 @@ export default function CouponsPage() {
     try {
       await deleteDoc(doc(db, "coupons", couponId));
       setCoupons(prev => prev.filter(c => c.id !== couponId));
-      toast({ title: "Coupon Deleted", description: "The coupon has been permanently removed." });
+      toast({ title: "کوپن حذف شد", description: "کوپن برای همیشه حذف شد." });
     } catch (error) {
       console.error("Error deleting coupon:", error);
-      toast({ variant: "destructive", title: "Delete Failed", description: "Could not delete the coupon." });
+      toast({ variant: "destructive", title: "حذف ناموفق", description: "امکان حذف کوپن وجود نداشت." });
     }
   };
 
   if (loading || !user) return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
 
+  const statusTranslations: { [key: string]: string } = {
+    active: 'فعال',
+    used: 'استفاده شده',
+    expired: 'منقضی شده'
+  };
+
   return (
     <>
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Coupons</h1>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">کوپن‌ها</h1>
           <p className="text-muted-foreground">
             {user.role === 'manager'
-              ? 'Manage and track all coupons.'
-              : 'View and manage your created coupons.'}
+              ? 'تمام کوپن‌ها را مدیریت و رهگیری کنید.'
+              : 'کوپن‌های ساخته شده خود را مشاهده و مدیریت کنید.'}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Create Coupon
+          <PlusCircle className="ml-2 h-4 w-4" /> ساخت کوپن
         </Button>
       </div>
 
@@ -210,9 +216,9 @@ export default function CouponsPage() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Coupon List</CardTitle>
+              <CardTitle>لیست کوپن‌ها</CardTitle>
               <CardDescription>
-                A list of all coupons in the system.
+                لیستی از تمام کوپن‌های موجود در سیستم.
               </CardDescription>
             </div>
             <DropdownMenu>
@@ -220,14 +226,14 @@ export default function CouponsPage() {
                 <Button variant="outline" size="sm" className="gap-1">
                   <Filter className="h-3.5 w-3.5" />
                   <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    Filter
+                    فیلتر
                   </span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuLabel>Filter by</DropdownMenuLabel>
+                <DropdownMenuLabel>فیلتر بر اساس</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuLabel>Status</DropdownMenuLabel>
+                <DropdownMenuLabel>وضعیت</DropdownMenuLabel>
                 {['active', 'used', 'expired'].map(status => (
                   <DropdownMenuCheckboxItem
                     key={status}
@@ -236,13 +242,13 @@ export default function CouponsPage() {
                       setStatusFilter(prev => checked ? [...prev, status] : prev.filter(s => s !== status))
                     }}
                   >
-                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                    {statusTranslations[status]}
                   </DropdownMenuCheckboxItem>
                 ))}
                 {user.role === 'manager' && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuLabel>Sales Agent</DropdownMenuLabel>
+                    <DropdownMenuLabel>نماینده فروش</DropdownMenuLabel>
                     {users.filter(u => u.role === 'sales').map(agent => (
                        <DropdownMenuCheckboxItem
                          key={agent.id}
@@ -264,13 +270,13 @@ export default function CouponsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                {user.role === 'manager' && <TableHead>Agent</TableHead>}
-                <TableHead>Product</TableHead>
-                <TableHead>Discount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Expires In</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>کد</TableHead>
+                {user.role === 'manager' && <TableHead>نماینده</TableHead>}
+                <TableHead>محصول</TableHead>
+                <TableHead>تخفیف</TableHead>
+                <TableHead>وضعیت</TableHead>
+                <TableHead>زمان انقضا</TableHead>
+                <TableHead className="text-left">عملیات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -293,59 +299,58 @@ export default function CouponsPage() {
                             'bg-red-500/20 text-red-700 border-red-500/30'
                           }
                         >
-                          {coupon.status}
+                          {statusTranslations[coupon.status]}
                         </Badge>
                       </TableCell>
                        <TableCell>
                           {coupon.status === 'active' ? (
                             <Countdown expiryDate={coupon.expires_at} />
                           ) : (
-                            new Date(coupon.expires_at).toLocaleDateString()
+                            new Date(coupon.expires_at).toLocaleDateString('fa-IR')
                           )}
                         </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-left">
                         <AlertDialog>
                            <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon">
-                                <span className="sr-only">Open menu</span>
+                                <span className="sr-only">باز کردن منو</span>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                              <DropdownMenuLabel>عملیات</DropdownMenuLabel>
                               <DropdownMenuItem onClick={() => handleCopy(coupon.code)}>
-                                Copy Link
+                                کپی لینک
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleUpdateStatus(coupon.id, 'used')}
                                 disabled={coupon.status !== 'active'}
                               >
-                                Mark as Used
+                                علامت‌گذاری به عنوان استفاده شده
                               </DropdownMenuItem>
                               <DropdownMenuItem
                                 onClick={() => handleUpdateStatus(coupon.id, 'expired')}
                                 disabled={coupon.status !== 'active'}
                               >
-                                Disable
+                                غیرفعال کردن
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                                <AlertDialogTrigger asChild>
-                                <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem>
                               </AlertDialogTrigger>
                             </DropdownMenuContent>
                           </DropdownMenu>
                           <AlertDialogContent>
                             <AlertDialogHeader>
-                              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                              <AlertDialogTitle>آیا کاملاً مطمئن هستید؟</AlertDialogTitle>
                               <AlertDialogDescription>
-                                This action cannot be undone. This will permanently delete the coupon
-                                from the database.
+                                این عملیات قابل بازگشت نیست. این کار کوپن را برای همیشه از پایگاه داده حذف می‌کند.
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(coupon.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                              <AlertDialogCancel>انصراف</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(coupon.id)} className="bg-destructive hover:bg-destructive/90">حذف</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
@@ -356,7 +361,7 @@ export default function CouponsPage() {
               ) : (
                 <TableRow>
                   <TableCell colSpan={user.role === 'manager' ? 7 : 6} className="h-24 text-center">
-                    No coupons found.
+                    کوپنی یافت نشد.
                   </TableCell>
                 </TableRow>
               )}

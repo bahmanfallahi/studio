@@ -30,7 +30,7 @@ export default function AgentDashboard({ user }: { user: User }) {
         const allCouponsSnapshot = await getDocs(allCouponsQuery);
         
         if (allCouponsSnapshot.empty && (allCouponsSnapshot.metadata.fromCache)) {
-             setError("Could not load dashboard data. Please check your network connection and try again.");
+             setError("امکان بارگذاری داده‌های داشبورد وجود ندارد. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.");
              setLoading(false);
              return;
         }
@@ -57,9 +57,9 @@ export default function AgentDashboard({ user }: { user: User }) {
       } catch (err) {
         console.error("Failed to fetch coupons: ", err);
         if ((err as any).code === 'failed-precondition') {
-             setError('A database index is required. Please ask the administrator to create the necessary Firestore index.');
+             setError('یک ایندکس پایگاه داده مورد نیاز است. لطفاً از مدیر سیستم بخواهید ایندکس لازم را در Firestore ایجاد کند.');
         } else {
-            setError('Could not fetch recent coupons. Please try again later.');
+            setError('امکان دریافت کوپن‌های اخیر وجود نداشت. لطفاً بعداً دوباره تلاش کنید.');
         }
       }
       setLoading(false);
@@ -71,8 +71,8 @@ export default function AgentDashboard({ user }: { user: User }) {
     const url = `${window.location.origin}/coupon/${code}`;
     navigator.clipboard.writeText(url);
     toast({
-      title: 'Copied to clipboard!',
-      description: `URL for coupon ${code} is ready to be shared.`,
+      title: 'در کلیپ‌بورد کپی شد!',
+      description: `URL کوپن ${code} برای اشتراک‌گذاری آماده است.`,
     });
   };
 
@@ -84,20 +84,26 @@ export default function AgentDashboard({ user }: { user: User }) {
     )
   }
 
+  const statusTranslations: { [key: string]: string } = {
+    active: 'فعال',
+    used: 'استفاده شده',
+    expired: 'منقضی شده'
+  };
+
   return (
     <div className="space-y-6">
-      <Card className="bg-gradient-to-r from-primary to-blue-500 text-primary-foreground shadow-lg">
+      <Card className="bg-gradient-to-l from-primary to-blue-500 text-primary-foreground shadow-lg">
         <CardHeader>
-          <CardTitle className="font-headline text-2xl">Ready for a new sale?</CardTitle>
+          <CardTitle className="font-headline text-2xl">آماده برای فروش جدید؟</CardTitle>
           <CardDescription className="text-primary-foreground/80">
-            Generate a new discount coupon to close your next deal.
+            برای نهایی کردن معامله بعدی خود، یک کوپن تخفیف جدید بسازید.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button asChild size="lg" variant="secondary" className="bg-white text-primary hover:bg-white/90">
             <Link href="/dashboard/coupons?create=true">
-              <PlusCircle className="mr-2 h-5 w-5" />
-              Create New Coupon
+              <PlusCircle className="ml-2 h-5 w-5" />
+              ساخت کوپن جدید
             </Link>
           </Button>
         </CardContent>
@@ -106,39 +112,39 @@ export default function AgentDashboard({ user }: { user: User }) {
       {error ? (
          <div className="flex flex-col items-center justify-center h-40 bg-destructive/10 rounded-lg">
             <AlertTriangle className="h-8 w-8 text-destructive mb-2" />
-            <h3 className="font-semibold text-destructive">Could not load stats</h3>
+            <h3 className="font-semibold text-destructive">امکان بارگذاری آمار وجود نداشت</h3>
             <p className="text-sm text-muted-foreground text-center px-4">{error}</p>
         </div>
       ) : (
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Coupons Created</CardTitle>
+            <CardTitle className="text-sm font-medium">کل کوپن‌های ساخته شده</CardTitle>
             <Ticket className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.total}</div>
-            <p className="text-xs text-muted-foreground">All-time</p>
+            <p className="text-xs text-muted-foreground">در تمام زمان‌ها</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active</CardTitle>
+            <CardTitle className="text-sm font-medium">فعال</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.active}</div>
-            <p className="text-xs text-muted-foreground">Currently live</p>
+            <p className="text-xs text-muted-foreground">در حال حاضر</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Used</CardTitle>
+            <CardTitle className="text-sm font-medium">استفاده شده</CardTitle>
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.used}</div>
-            <p className="text-xs text-muted-foreground">Converted to sales</p>
+            <p className="text-xs text-muted-foreground">تبدیل شده به فروش</p>
           </CardContent>
         </Card>
       </div>
@@ -146,18 +152,18 @@ export default function AgentDashboard({ user }: { user: User }) {
 
        <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Your Recent Coupons</CardTitle>
-           <CardDescription>A quick look at the last 5 coupons you created.</CardDescription>
+          <CardTitle className="font-headline">کوپن‌های اخیر شما</CardTitle>
+           <CardDescription>نگاهی سریع به ۵ کوپن آخری که ساخته‌اید.</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Discount</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Expires In</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>کد</TableHead>
+                <TableHead>تخفیف</TableHead>
+                <TableHead>وضعیت</TableHead>
+                <TableHead>زمان انقضا</TableHead>
+                <TableHead className="text-left">عملیات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -172,7 +178,7 @@ export default function AgentDashboard({ user }: { user: User }) {
                        coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 
                        coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
                        'bg-red-500/20 text-red-700 border-red-500/30'
-                    }>{coupon.status}</Badge>
+                    }>{statusTranslations[coupon.status]}</Badge>
                   </TableCell>
                    <TableCell>
                       {coupon.status === 'active' ? (
@@ -181,7 +187,7 @@ export default function AgentDashboard({ user }: { user: User }) {
                         '--'
                       )}
                     </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-left">
                     <Button variant="ghost" size="icon" onClick={() => handleCopy(coupon.code)}>
                       <Copy className="h-4 w-4" />
                     </Button>
@@ -190,7 +196,7 @@ export default function AgentDashboard({ user }: { user: User }) {
               )) : (
                  <TableRow>
                   <TableCell colSpan={5} className="h-24 text-center">
-                    {error ? 'Could not load recent coupons.' : 'No recent coupons found.'}
+                    {error ? 'امکان بارگذاری کوپن‌های اخیر وجود نداشت.' : 'کوپن جدیدی یافت نشد.'}
                   </TableCell>
                 </TableRow>
               )}

@@ -28,8 +28,8 @@ export default function Dashboard() {
   return (
     <>
       <div className="mb-4">
-        <h1 className="text-3xl font-bold font-headline tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {user.full_name}. Here's what's happening.</p>
+        <h1 className="text-3xl font-bold font-headline tracking-tight">داشبورد</h1>
+        <p className="text-muted-foreground">خوش آمدید، {user.full_name}. گزارش امروز به این شرح است.</p>
       </div>
       {user.role === 'manager' ? <ManagerDashboard /> : <AgentDashboard user={user}/>}
     </>

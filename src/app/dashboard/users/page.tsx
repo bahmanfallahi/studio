@@ -96,45 +96,45 @@ function UserForm({
     <Dialog open={!!user} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-headline">{user.id ? 'Edit User' : 'Add New User'}</DialogTitle>
+          <DialogTitle className="font-headline">{user.id ? 'ویرایش کاربر' : 'افزودن کاربر جدید'}</DialogTitle>
           <DialogDescription>
-            {user.id ? 'Update user details and role.' : 'Create a new sales agent or manager.'}
+            {user.id ? 'جزئیات و نقش کاربر را به‌روز کنید.' : 'یک نماینده فروش یا مدیر جدید ایجاد کنید.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="full_name">Full Name</Label>
+            <Label htmlFor="full_name">نام کامل</Label>
             <Input id="full_name" name="full_name" value={formData.full_name || ''} onChange={handleChange} required/>
           </div>
           <div>
-            <Label htmlFor="username">Username (Email)</Label>
+            <Label htmlFor="username">نام کاربری (ایمیل)</Label>
             <Input id="username" name="username" type="email" value={formData.username || ''} onChange={handleChange} required/>
           </div>
            <div>
-            <Label htmlFor="password_hash">Password</Label>
-            <Input id="password_hash" name="password_hash" type="password" placeholder={user.id ? 'Leave blank to keep unchanged' : ''} onChange={handleChange} required={!user.id} />
+            <Label htmlFor="password_hash">رمز عبور</Label>
+            <Input id="password_hash" name="password_hash" type="password" placeholder={user.id ? 'برای عدم تغییر، خالی بگذارید' : ''} onChange={handleChange} required={!user.id} />
           </div>
           <div>
-            <Label htmlFor="role">Role</Label>
+            <Label htmlFor="role">نقش</Label>
             <Select onValueChange={handleRoleChange} defaultValue={formData.role}>
               <SelectTrigger>
-                <SelectValue placeholder="Select a role" />
+                <SelectValue placeholder="یک نقش انتخاب کنید" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="sales">Sales Agent</SelectItem>
-                <SelectItem value="manager">Sales Manager</SelectItem>
+                <SelectItem value="sales">نماینده فروش</SelectItem>
+                <SelectItem value="manager">مدیر فروش</SelectItem>
               </SelectContent>
             </Select>
           </div>
            <div>
-            <Label htmlFor="coupon_limit_per_month">Monthly Coupon Limit</Label>
+            <Label htmlFor="coupon_limit_per_month">سقف ماهانه کوپن</Label>
             <Input id="coupon_limit_per_month" name="coupon_limit_per_month" type="number" value={formData.coupon_limit_per_month || 10} onChange={handleChange} required/>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>انصراف</Button>
             <Button type="submit" disabled={isSaving}>
-                {isSaving && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                {isSaving ? 'Saving...' : 'Save User' }
+                {isSaving && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+                {isSaving ? 'در حال ذخیره...' : 'ذخیره کاربر' }
             </Button>
           </DialogFooter>
         </form>
@@ -161,8 +161,8 @@ export default function UsersPage() {
         } catch (error) {
             toast({
                 variant: 'destructive',
-                title: 'Error fetching users',
-                description: 'Could not load users from the database.',
+                title: 'خطا در دریافت کاربران',
+                description: 'امکان بارگذاری کاربران از پایگاه داده وجود نداشت.',
             });
             console.error("Error fetching users: ", error);
         }
@@ -185,7 +185,7 @@ export default function UsersPage() {
          }
          await setDoc(userRef, dataToSave, { merge: true });
          setUsers(users.map(u => u.id === userData.id ? { ...u, ...dataToSave } as User : u));
-         toast({ title: 'User Updated', description: `${userData.full_name}'s profile has been updated.` });
+         toast({ title: 'کاربر به‌روز شد', description: `پروفایل ${userData.full_name} با موفقیت به‌روزرسانی شد.` });
        } else {
          // Add
          const newUserData: Omit<User, 'id'> = {
@@ -199,37 +199,37 @@ export default function UsersPage() {
          const docRef = await addDoc(collection(db, "users"), newUserData);
          const newUser: User = { ...newUserData, id: docRef.id };
          setUsers([newUser, ...users]);
-         toast({ title: 'User Added', description: `${newUser.full_name} has been added to the system.` });
+         toast({ title: 'کاربر اضافه شد', description: `${newUser.full_name} به سیستم اضافه شد.` });
        }
        setEditingUser(null);
        return true;
     } catch (error) {
         console.error("Error saving user: ", error);
-        toast({ variant: 'destructive', title: "Save failed", description: "Could not save user." });
+        toast({ variant: 'destructive', title: "ذخیره ناموفق", description: "امکان ذخیره کاربر وجود نداشت." });
         return false;
     }
   };
 
   const handleDelete = async (userId: string) => {
     if (userId === currentUser?.id) {
-        toast({ variant: 'destructive', title: 'Action Forbidden', description: "You cannot delete your own account." });
+        toast({ variant: 'destructive', title: 'عملیات غیرمجاز', description: "شما نمی‌توانید حساب کاربری خود را حذف کنید." });
         return;
     }
     try {
         await deleteDoc(doc(db, "users", userId));
         setUsers(users.filter(u => u.id !== userId));
-        toast({ title: 'User Deleted', description: "The user has been removed from the system." });
+        toast({ title: 'کاربر حذف شد', description: "کاربر از سیستم حذف شد." });
     } catch(error) {
         console.error("Error deleting user: ", error);
-        toast({ variant: 'destructive', title: "Delete failed", description: "Could not remove user from the database." });
+        toast({ variant: 'destructive', title: "حذف ناموفق", description: "امکان حذف کاربر از پایگاه داده وجود نداشت." });
     }
   };
 
   if (currentUser?.role !== 'manager') {
     return (
       <div className="text-center py-10">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>
+        <p className="text-muted-foreground">شما اجازه مشاهده این صفحه را ندارید.</p>
       </div>
     );
   }
@@ -245,11 +245,11 @@ export default function UsersPage() {
       )}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Users</h1>
-          <p className="text-muted-foreground">Manage your team of sales agents and managers.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">کاربران</h1>
+          <p className="text-muted-foreground">تیم نمایندگان فروش و مدیران خود را مدیریت کنید.</p>
         </div>
         <Button onClick={() => setEditingUser({ full_name: '', username: '', role: 'sales', coupon_limit_per_month: 10 })}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add User
+          <PlusCircle className="ml-2 h-4 w-4" /> افزودن کاربر
         </Button>
       </div>
 
@@ -263,13 +263,13 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Full Name</TableHead>
-                <TableHead>Username</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Coupon Limit</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>نام کامل</TableHead>
+                <TableHead>نام کاربری</TableHead>
+                <TableHead>نقش</TableHead>
+                <TableHead>سقف کوپن</TableHead>
+                <TableHead>تاریخ ایجاد</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">عملیات</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -280,40 +280,40 @@ export default function UsersPage() {
                   <TableCell>{user.username}</TableCell>
                   <TableCell>
                     <Badge variant={user.role === 'manager' ? 'default' : 'secondary'}>
-                      {user.role}
+                      {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
                   <TableCell>{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
-                  <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(user.created_at).toLocaleDateString('fa-IR')}</TableCell>
                   <TableCell>
                     <AlertDialog>
                        <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button aria-haspopup="true" size="icon" variant="ghost">
                             <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
+                            <span className="sr-only">باز کردن منو</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingUser(user)}>Edit</DropdownMenuItem>
+                          <DropdownMenuLabel>عملیات</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => setEditingUser(user)}>ویرایش</DropdownMenuItem>
                           <AlertDialogTrigger asChild>
                               <DropdownMenuItem className="text-red-600" disabled={user.id === currentUser?.id}>
-                                  Delete
+                                  حذف
                               </DropdownMenuItem>
                           </AlertDialogTrigger>
                         </DropdownMenuContent>
                       </DropdownMenu>
                        <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogTitle>آیا کاملاً مطمئن هستید؟</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the user's account and all associated data.
+                             این عملیات قابل بازگشت نیست. این کار حساب کاربری و تمام داده‌های مرتبط با آن را برای همیشه حذف می‌کند.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(user.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                            <AlertDialogCancel>انصراف</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(user.id)} className="bg-destructive hover:bg-destructive/90">حذف</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                     </AlertDialog>

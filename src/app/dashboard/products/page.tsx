@@ -98,33 +98,33 @@ function ProductForm({
     <Dialog open={!!product} onOpenChange={onClose}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle className="font-headline">{product.id ? 'Edit Product' : 'Add New Product'}</DialogTitle>
+          <DialogTitle className="font-headline">{product.id ? 'ویرایش محصول' : 'افزودن محصول جدید'}</DialogTitle>
           <DialogDescription>
-            {product.id ? 'Update the details for this product.' : 'Fill in the information for the new product.'}
+            {product.id ? 'جزئیات این محصول را به‌روز کنید.' : 'اطلاعات محصول جدید را وارد کنید.'}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <Label htmlFor="name">Product Name</Label>
+            <Label htmlFor="name">نام محصول</Label>
             <Input id="name" name="name" value={formData.name || ''} onChange={handleChange} required />
           </div>
           <div>
-            <Label htmlFor="description">Description</Label>
+            <Label htmlFor="description">توضیحات</Label>
             <Textarea id="description" name="description" value={formData.description || ''} onChange={handleChange} required/>
           </div>
           <div>
-            <Label htmlFor="price">Price</Label>
+            <Label htmlFor="price">قیمت</Label>
             <Input id="price" name="price" type="number" value={formData.price || 0} onChange={handleChange} required/>
           </div>
           <div className="flex items-center space-x-2">
-            <Switch id="is_active" checked={formData.is_active} onCheckedChange={handleSwitchChange} />
-            <Label htmlFor="is_active">Active</Label>
+            <Label htmlFor="is_active">فعال</Label>
+            <Switch id="is_active" checked={formData.is_active} onCheckedChange={handleSwitchChange} dir="ltr" />
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={onClose} disabled={isSaving}>Cancel</Button>
+            <Button variant="outline" onClick={onClose} disabled={isSaving}>انصراف</Button>
             <Button type="submit" disabled={isSaving}>
-                {isSaving && <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
-                {isSaving ? 'Saving...' : 'Save Product'}
+                {isSaving && <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />}
+                {isSaving ? 'در حال ذخیره...' : 'ذخیره محصول'}
             </Button>
           </DialogFooter>
         </form>
@@ -151,8 +151,8 @@ export default function ProductsPage() {
       } catch (error) {
         toast({
           variant: 'destructive',
-          title: 'Error fetching products',
-          description: 'Could not load products from the database.',
+          title: 'خطا در دریافت محصولات',
+          description: 'امکان بارگذاری محصولات از پایگاه داده وجود نداشت.',
         });
         console.error("Error fetching products: ", error);
       }
@@ -169,7 +169,7 @@ export default function ProductsPage() {
         const productRef = doc(db, "products", productData.id);
         await setDoc(productRef, productData, { merge: true });
         setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } : p));
-        toast({ title: "Product Updated", description: `${productData.name} has been updated.` });
+        toast({ title: "محصول به‌روز شد", description: `${productData.name} با موفقیت به‌روزرسانی شد.` });
       } else {
         // Add
         const newProductData: Omit<Product, 'id'> = {
@@ -182,13 +182,13 @@ export default function ProductsPage() {
         const docRef = await addDoc(collection(db, "products"), newProductData);
         const newProduct: Product = { ...newProductData, id: docRef.id };
         setProducts(prev => [newProduct, ...prev]);
-        toast({ title: "Product Added", description: `${newProduct.name} has been added.` });
+        toast({ title: "محصول اضافه شد", description: `${newProduct.name} با موفقیت اضافه شد.` });
       }
       setEditingProduct(null);
       return true;
     } catch (error) {
       console.error("Error saving product: ", error);
-      toast({ variant: "destructive", title: "Save Failed", description: "Could not save product to the database." });
+      toast({ variant: "destructive", title: "ذخیره ناموفق", description: "امکان ذخیره محصول در پایگاه داده وجود نداشت." });
       return false;
     }
   };
@@ -197,18 +197,18 @@ export default function ProductsPage() {
     try {
         await deleteDoc(doc(db, "products", productId));
         setProducts(products.filter(p => p.id !== productId));
-        toast({ title: "Product Deleted", description: `The product has been removed.` });
+        toast({ title: "محصول حذف شد", description: `محصول با موفقیت حذف شد.` });
     } catch (error) {
         console.error("Error deleting product: ", error);
-        toast({ variant: 'destructive', title: "Delete Failed", description: "Could not remove product from the database." });
+        toast({ variant: 'destructive', title: "حذف ناموفق", description: "امکان حذف محصول از پایگاه داده وجود نداشت." });
     }
   };
   
   if (user?.role !== 'manager') {
     return (
       <div className="text-center py-10">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>
+        <p className="text-muted-foreground">شما اجازه مشاهده این صفحه را ندارید.</p>
       </div>
     );
   }
@@ -224,11 +224,11 @@ export default function ProductsPage() {
       )}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-3xl font-bold font-headline tracking-tight">Products</h1>
-          <p className="text-muted-foreground">Manage your inventory of modems and other products.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">محصولات</h1>
+          <p className="text-muted-foreground">موجودی مودم‌ها و سایر محصولات خود را مدیریت کنید.</p>
         </div>
         <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true, created_at: new Date().toISOString() })}>
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Product
+          <PlusCircle className="ml-2 h-4 w-4" /> افزودن محصول
         </Button>
       </div>
 
@@ -242,12 +242,12 @@ export default function ProductsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Created At</TableHead>
+                <TableHead>نام</TableHead>
+                <TableHead>وضعیت</TableHead>
+                <TableHead>قیمت</TableHead>
+                <TableHead>تاریخ ایجاد</TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">عملیات</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -257,39 +257,38 @@ export default function ProductsPage() {
                   <TableCell className="font-medium">{product.name}</TableCell>
                   <TableCell>
                     <Badge variant={product.is_active ? 'default' : 'outline'} className={product.is_active ? 'bg-green-500/20 text-green-700 border-green-500/30' : ''}>
-                      {product.is_active ? 'Active' : 'Inactive'}
+                      {product.is_active ? 'فعال' : 'غیرفعال'}
                     </Badge>
                   </TableCell>
                   <TableCell>${product.price.toFixed(2)}</TableCell>
-                  <TableCell>{new Date(product.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>{new Date(product.created_at).toLocaleDateString('fa-IR')}</TableCell>
                   <TableCell>
                     <AlertDialog>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button aria-haspopup="true" size="icon" variant="ghost">
                             <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Toggle menu</span>
+                            <span className="sr-only">باز کردن منو</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingProduct(product)}>Edit</DropdownMenuItem>
+                          <DropdownMenuLabel>عملیات</DropdownMenuLabel>
+                          <DropdownMenuItem onClick={() => setEditingProduct(product)}>ویرایش</DropdownMenuItem>
                            <AlertDialogTrigger asChild>
-                            <DropdownMenuItem className="text-red-600">Delete</DropdownMenuItem>
+                            <DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem>
                           </AlertDialogTrigger>
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogTitle>آیا کاملاً مطمئن هستید؟</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete the product
-                              and may affect existing coupons.
+                              این عملیات قابل بازگشت نیست. این کار محصول را برای همیشه حذف کرده و ممکن است روی کوپن‌های موجود تأثیر بگذارد.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDelete(product.id)} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                            <AlertDialogCancel>انصراف</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(product.id)} className="bg-destructive hover:bg-destructive/90">حذف</AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>

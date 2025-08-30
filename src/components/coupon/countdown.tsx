@@ -36,13 +36,13 @@ export default function Countdown({ expiryDate }: { expiryDate: string }) {
   }, [expiryDate]);
 
   if (!timeLeft) {
-    return <span>Expired</span>;
+    return <span>منقضی شده</span>;
   }
   
   const pad = (num: number) => num.toString().padStart(2, '0');
 
   return (
-    <span>
+    <span dir="ltr">
       {timeLeft.days > 0 && `${timeLeft.days}d `}
       {pad(timeLeft.hours)}h {pad(timeLeft.minutes)}m {pad(timeLeft.seconds)}s
     </span>

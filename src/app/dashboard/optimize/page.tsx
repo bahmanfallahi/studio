@@ -44,8 +44,8 @@ export default function OptimizePage() {
   if (user?.role !== 'manager') {
     return (
       <div className="text-center py-10">
-        <h1 className="text-2xl font-bold">Access Denied</h1>
-        <p className="text-muted-foreground">You do not have permission to view this page.</p>
+        <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>
+        <p className="text-muted-foreground">شما اجازه مشاهده این صفحه را ندارید.</p>
       </div>
     );
   }
@@ -61,8 +61,8 @@ export default function OptimizePage() {
   return (
     <div>
        <div className="mb-4">
-          <h1 className="text-3xl font-bold font-headline tracking-tight">AI Discount Optimizer</h1>
-          <p className="text-muted-foreground">Leverage AI to find the perfect discount for any situation.</p>
+          <h1 className="text-3xl font-bold font-headline tracking-tight">بهینه‌ساز تخفیف هوشمند</h1>
+          <p className="text-muted-foreground">از هوش مصنوعی برای یافتن تخفیف ایده‌آل در هر شرایطی استفاده کنید.</p>
         </div>
       <OptimizeForm products={activeProducts} salesAgents={salesAgents} />
     </div>

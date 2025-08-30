@@ -35,8 +35,8 @@ export default function DbTester() {
       console.error("Database connection test failed:", error);
       toast({
         variant: 'destructive',
-        title: 'Connection Failed',
-        description: error.message || 'Could not connect to the database. Check console for details.',
+        title: 'اتصال ناموفق',
+        description: error.message || 'امکان اتصال به پایگاه داده وجود نداشت. کنسول را برای جزئیات بررسی کنید.',
       });
     } finally {
       setIsLoading(false);
@@ -49,21 +49,21 @@ export default function DbTester() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Database className="h-5 w-5" />
-            Database Connection Tester
+            تست‌کننده اتصال پایگاه داده
           </CardTitle>
           <CardDescription>
-            Click the button to verify the connection to the Firebase Firestore database.
+            برای تأیید اتصال به پایگاه داده Firebase Firestore، روی دکمه کلیک کنید.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Button onClick={handleTestConnection} disabled={isLoading} className="w-full">
             {isLoading ? (
               <>
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                Testing...
+                <LoaderCircle className="ml-2 h-4 w-4 animate-spin" />
+                در حال تست...
               </>
             ) : (
-              'Test Database Connection'
+              'تست اتصال پایگاه داده'
             )}
           </Button>
         </CardContent>
@@ -72,14 +72,14 @@ export default function DbTester() {
       <AlertDialog open={isSuccessModalOpen} onOpenChange={setSuccessModalOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Connection Successful!</AlertDialogTitle>
+            <AlertDialogTitle>اتصال موفقیت‌آمیز بود!</AlertDialogTitle>
             <AlertDialogDescription>
-              The application successfully connected to the Firebase Firestore database.
+              برنامه با موفقیت به پایگاه داده Firebase Firestore متصل شد.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction onClick={() => setSuccessModalOpen(false)}>
-              Great!
+              عالی!
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
