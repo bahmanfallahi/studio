@@ -4,8 +4,8 @@ import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'کوپن‌کرافتر',
-  description: 'ساخت، مدیریت و رهگیری کوپن‌های تخفیف برای تیم فروش شما.',
+  title: 'کوپن‌ کرافتر',
+  description: 'ساخت، مدیریت و رهگیری کوپن‌های تخفیف برای تیم فروش تانوا ۳۴۱۸.',
 };
 
 export default function RootLayout({
