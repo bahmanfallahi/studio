@@ -119,15 +119,15 @@ export default function SettingsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>نماینده فروش</TableHead>
-                <TableHead className="w-[200px]">سقف کوپن</TableHead>
+                <TableHead className="text-right">نماینده فروش</TableHead>
+                <TableHead className="w-[200px] text-right">سقف کوپن</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {salesAgents.map(agent => (
                 <TableRow key={agent.id}>
-                  <TableCell className="font-medium">{agent.full_name}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-right">{agent.full_name}</TableCell>
+                  <TableCell className="text-right">
                     <Input
                       type="number"
                       value={limits[agent.id] || ''}

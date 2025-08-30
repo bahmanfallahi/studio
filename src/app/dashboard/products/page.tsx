@@ -242,27 +242,28 @@ export default function ProductsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>نام</TableHead>
-                <TableHead>وضعیت</TableHead>
-                <TableHead>قیمت</TableHead>
-                <TableHead>تاریخ ایجاد</TableHead>
-                <TableHead>
+                <TableHead className="text-right">نام</TableHead>
+                <TableHead className="text-right">وضعیت</TableHead>
+                <TableHead className="text-right">قیمت</TableHead>
+                <TableHead className="text-right">تاریخ ایجاد</TableHead>
+                <TableHead className="text-center">
                   <span className="sr-only">عملیات</span>
+                  عملیات
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {products.map((product) => (
                 <TableRow key={product.id}>
-                  <TableCell className="font-medium">{product.name}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-right">{product.name}</TableCell>
+                  <TableCell className="text-right">
                     <Badge variant={product.is_active ? 'default' : 'outline'} className={product.is_active ? 'bg-green-500/20 text-green-700 border-green-500/30' : ''}>
                       {product.is_active ? 'فعال' : 'غیرفعال'}
                     </Badge>
                   </TableCell>
-                  <TableCell>${product.price.toFixed(2)}</TableCell>
-                  <TableCell>{new Date(product.created_at).toLocaleDateString('fa-IR')}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-right">${product.price.toFixed(2)}</TableCell>
+                  <TableCell className="text-right">{new Date(product.created_at).toLocaleDateString('fa-IR')}</TableCell>
+                  <TableCell className="text-center">
                     <AlertDialog>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>

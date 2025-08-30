@@ -224,10 +224,10 @@ export default function CouponsPage() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
-                  <Filter className="h-3.5 w-3.5" />
                   <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
                     فیلتر
                   </span>
+                  <Filter className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -270,13 +270,13 @@ export default function CouponsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>کد</TableHead>
-                {user.role === 'manager' && <TableHead>نماینده</TableHead>}
-                <TableHead>محصول</TableHead>
-                <TableHead>تخفیف</TableHead>
-                <TableHead>وضعیت</TableHead>
-                <TableHead>زمان انقضا</TableHead>
-                <TableHead className="text-left">عملیات</TableHead>
+                <TableHead className="text-right">کد</TableHead>
+                {user.role === 'manager' && <TableHead className="text-right">نماینده</TableHead>}
+                <TableHead className="text-right">محصول</TableHead>
+                <TableHead className="text-right">تخفیف</TableHead>
+                <TableHead className="text-right">وضعیت</TableHead>
+                <TableHead className="text-right">زمان انقضا</TableHead>
+                <TableHead className="text-center">عملیات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -286,11 +286,11 @@ export default function CouponsPage() {
                   const couponUser = users.find((u) => u.id === coupon.user_id);
                   return (
                     <TableRow key={coupon.id}>
-                      <TableCell className="font-medium">{coupon.code}</TableCell>
-                       {user.role === 'manager' && <TableCell>{couponUser?.full_name || 'N/A'}</TableCell>}
-                      <TableCell>{product?.name || 'N/A'}</TableCell>
-                      <TableCell>{coupon.discount_percent}%</TableCell>
-                      <TableCell>
+                      <TableCell className="font-medium text-right">{coupon.code}</TableCell>
+                       {user.role === 'manager' && <TableCell className="text-right">{couponUser?.full_name || 'N/A'}</TableCell>}
+                      <TableCell className="text-right">{product?.name || 'N/A'}</TableCell>
+                      <TableCell className="text-right">{coupon.discount_percent}%</TableCell>
+                      <TableCell className="text-right">
                         <Badge
                           variant={coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'}
                           className={
@@ -302,14 +302,14 @@ export default function CouponsPage() {
                           {statusTranslations[coupon.status]}
                         </Badge>
                       </TableCell>
-                       <TableCell>
+                       <TableCell className="text-right">
                           {coupon.status === 'active' ? (
                             <Countdown expiryDate={coupon.expires_at} />
                           ) : (
                             new Date(coupon.expires_at).toLocaleDateString('fa-IR')
                           )}
                         </TableCell>
-                      <TableCell className="text-left">
+                      <TableCell className="text-center">
                         <AlertDialog>
                            <DropdownMenu>
                             <DropdownMenuTrigger asChild>

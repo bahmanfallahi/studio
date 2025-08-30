@@ -159,19 +159,19 @@ export default function AgentDashboard({ user }: { user: User }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>کد</TableHead>
-                <TableHead>تخفیف</TableHead>
-                <TableHead>وضعیت</TableHead>
-                <TableHead>زمان انقضا</TableHead>
-                <TableHead className="text-left">عملیات</TableHead>
+                <TableHead className="text-right">کد</TableHead>
+                <TableHead className="text-right">تخفیف</TableHead>
+                <TableHead className="text-right">وضعیت</TableHead>
+                <TableHead className="text-right">زمان انقضا</TableHead>
+                <TableHead className="text-center">عملیات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {coupons.length > 0 ? coupons.map((coupon) => (
                 <TableRow key={coupon.id}>
-                  <TableCell className="font-medium">{coupon.code}</TableCell>
-                  <TableCell>{coupon.discount_percent}%</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-right">{coupon.code}</TableCell>
+                  <TableCell className="text-right">{coupon.discount_percent}%</TableCell>
+                  <TableCell className="text-right">
                     <Badge variant={
                       coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'
                     } className={
@@ -180,14 +180,14 @@ export default function AgentDashboard({ user }: { user: User }) {
                        'bg-red-500/20 text-red-700 border-red-500/30'
                     }>{statusTranslations[coupon.status]}</Badge>
                   </TableCell>
-                   <TableCell>
+                   <TableCell className="text-right">
                       {coupon.status === 'active' ? (
                         <Countdown expiryDate={coupon.expires_at} />
                       ) : (
                         '--'
                       )}
                     </TableCell>
-                  <TableCell className="text-left">
+                  <TableCell className="text-center">
                     <Button variant="ghost" size="icon" onClick={() => handleCopy(coupon.code)}>
                       <Copy className="h-4 w-4" />
                     </Button>

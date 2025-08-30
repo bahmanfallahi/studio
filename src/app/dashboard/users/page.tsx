@@ -263,29 +263,29 @@ export default function UsersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>نام کامل</TableHead>
-                <TableHead>نام کاربری</TableHead>
-                <TableHead>نقش</TableHead>
-                <TableHead>سقف کوپن</TableHead>
-                <TableHead>تاریخ ایجاد</TableHead>
-                <TableHead>
-                  <span className="sr-only">عملیات</span>
+                <TableHead className="text-right">نام کامل</TableHead>
+                <TableHead className="text-right">نام کاربری</TableHead>
+                <TableHead className="text-right">نقش</TableHead>
+                <TableHead className="text-right">سقف کوپن</TableHead>
+                <TableHead className="text-right">تاریخ ایجاد</TableHead>
+                <TableHead className="text-center">
+                  عملیات
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.full_name}</TableCell>
-                  <TableCell>{user.username}</TableCell>
-                  <TableCell>
+                  <TableCell className="font-medium text-right">{user.full_name}</TableCell>
+                  <TableCell className="text-right">{user.username}</TableCell>
+                  <TableCell className="text-right">
                     <Badge variant={user.role === 'manager' ? 'default' : 'secondary'}>
                       {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
-                  <TableCell>{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
-                  <TableCell>{new Date(user.created_at).toLocaleDateString('fa-IR')}</TableCell>
-                  <TableCell>
+                  <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
+                  <TableCell className="text-right">{new Date(user.created_at).toLocaleDateString('fa-IR')}</TableCell>
+                  <TableCell className="text-center">
                     <AlertDialog>
                        <DropdownMenu>
                         <DropdownMenuTrigger asChild>
