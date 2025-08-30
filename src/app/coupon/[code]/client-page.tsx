@@ -21,7 +21,7 @@ export default function PublicCouponPageClient({ coupon, product }: { coupon: Co
         <div className="bg-primary text-primary-foreground rounded-full p-4 mb-4">
           <Ticket className="h-12 w-12" />
         </div>
-        <h1 className="text-5xl font-headline font-bold text-primary">CouponCrafter</h1>
+        <h1 className="text-5xl font-headline font-bold text-primary">موپن</h1>
         <p className="text-muted-foreground mt-2">Here is your exclusive offer!</p>
       </div>
       {loading ? (

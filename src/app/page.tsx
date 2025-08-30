@@ -52,8 +52,8 @@ export default function LoginPage() {
         <div className="bg-primary text-primary-foreground rounded-full p-4 mb-4">
           <Ticket className="h-12 w-12" />
         </div>
-        <h1 className="text-5xl font-headline font-bold text-primary">کوپن‌کرافتر</h1>
-        <p className="text-muted-foreground mt-2">ابزار نهایی برای تیم‌های فروش فیبر نوری.</p>
+        <h1 className="text-5xl font-headline font-bold text-primary">موپن</h1>
+        <p className="text-muted-foreground mt-2">از پیگیری تا حصول نتیجه، فقط با یک کوپن</p>
       </div>
       <Card className="w-full max-w-sm shadow-2xl">
         <CardHeader>
