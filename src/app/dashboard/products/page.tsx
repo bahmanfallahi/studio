@@ -8,7 +8,6 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from '@/components/ui/card';
 import {
   Table,
@@ -53,6 +52,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { createClient } from '@/lib/supabase';
+import { addProduct, updateProduct, deleteProduct } from './actions';
 
 
 function ProductForm({
@@ -61,7 +61,7 @@ function ProductForm({
   onClose,
 }: {
   product: Partial<Product> | null;
-  onSave: (product: Omit<Product, 'id' | 'created_at'>) => Promise<boolean>;
+  onSave: (product: Partial<Product>) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<Product>>(
@@ -81,8 +81,7 @@ function ProductForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    const dataToSave = { ...formData };
-    const success = await onSave(dataToSave as Omit<Product, 'id' | 'created_at'>);
+    const success = await onSave(formData);
     setIsSaving(false);
     if (success) onClose();
   };
@@ -156,21 +155,33 @@ export default function ProductsPage() {
     fetchProducts();
   }, [fetchProducts]);
 
-  const handleSave = async (productData: Omit<Product, 'id' | 'created_at'>) => {
-    toast({
-        variant: "destructive",
-        title: "عملیات غیرمجاز",
-        description: "ایجاد یا ویرایش مستقیم محصولات از کلاینت به دلیل مسائل امنیتی RLS امکان‌پذیر نیست و نیازمند یک سرور اکشن امن است."
-    });
-    return false;
+  const handleSave = async (productData: Partial<Product>) => {
+    let result;
+    if (productData.id) {
+      const { id, ...updateData } = productData;
+      result = await updateProduct(id, updateData);
+    } else {
+      result = await addProduct(productData as Omit<Product, 'id' | 'created_at'>);
+    }
+
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'ذخیره ناموفق', description: result.error.message });
+        return false;
+    }
+
+    toast({ title: 'موفقیت', description: `محصول با موفقیت ${productData.id ? 'به‌روز' : 'ایجاد'} شد.` });
+    fetchProducts();
+    return true;
   };
 
   const handleDelete = async (productId: string) => {
-    toast({
-        variant: 'destructive',
-        title: "عملیات غیرمجاز",
-        description: "حذف مستقیم محصولات از کلاینت امکان‌پذیر نیست."
-    });
+    const result = await deleteProduct(productId);
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'حذف ناموفق', description: result.error.message });
+    } else {
+        toast({ title: 'محصول حذف شد' });
+        fetchProducts();
+    }
   };
   
   if (profile?.role !== 'manager') {
@@ -194,15 +205,18 @@ export default function ProductsPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-bold font-headline tracking-tight">محصولات</h1>
-          <p className="text-muted-foreground">موجودی مودم‌ها و سایر محصولات خود را مدیریت کنید. (عملیات نوشتن غیرفعال است)</p>
+          <p className="text-muted-foreground">موجودی مودم‌ها و سایر محصولات خود را مدیریت کنید.</p>
         </div>
-        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true })} disabled>
+        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true })}>
           <PlusCircle className="ml-2 h-4 w-4" /> افزودن محصول
         </Button>
       </div>
 
       <Card>
-        <CardContent className="pt-6">
+        <CardHeader>
+           <CardTitle>لیست محصولات</CardTitle>
+        </CardHeader>
+        <CardContent>
           {loading ? (
              <div className="flex items-center justify-center h-48"><LoaderCircle className="h-10 w-10 animate-spin" /></div>
           ) : (
@@ -217,7 +231,7 @@ export default function ProductsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.map((product) => (
+              {products.length > 0 ? products.map((product) => (
                 <TableRow key={product.id}>
                   <TableCell className="font-medium text-right">{product.name}</TableCell>
                   <TableCell className="text-right">
@@ -233,8 +247,8 @@ export default function ProductsPage() {
                         <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">باز کردن منو</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingProduct(product)} disabled>ویرایش</DropdownMenuItem>
-                           <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600" disabled>حذف</DropdownMenuItem></AlertDialogTrigger>
+                          <DropdownMenuItem onClick={() => setEditingProduct(product)}>ویرایش</DropdownMenuItem>
+                           <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem></AlertDialogTrigger>
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <AlertDialogContent>
@@ -250,7 +264,11 @@ export default function ProductsPage() {
                       </AlertDialog>
                   </TableCell>
                 </TableRow>
-              ))}
+              )) : (
+                 <TableRow>
+                  <TableCell colSpan={5} className="h-24 text-center">محصولی یافت نشد.</TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
           )}
@@ -259,5 +277,3 @@ export default function ProductsPage() {
     </>
   );
 }
-
-    

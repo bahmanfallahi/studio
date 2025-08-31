@@ -5,6 +5,103 @@ import { UserProfile, Product, Coupon } from '@/lib/data';
 // It is intended to be called from a secure server-side environment (like a Server Action)
 // and should not be exposed directly to the client.
 
+async function deleteExistingData(supabaseAdmin: any) {
+  console.log("Starting data cleanup...");
+  
+  // 1. Delete all users from auth.users
+  const { data: { users: authUsers }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
+  if (listError) throw new Error(`Error listing users: ${listError.message}`);
+
+  if (authUsers.length > 0) {
+      console.log(`Found ${authUsers.length} users in auth. Deleting...`);
+      // The CASCADE on the public.users table's foreign key will handle deletions there.
+      const deletePromises = authUsers.map(user => supabaseAdmin.auth.admin.deleteUser(user.id));
+      await Promise.all(deletePromises);
+      console.log("All auth users deleted. Corresponding public.users entries deleted via CASCADE.");
+  } else {
+      console.log("No existing auth users to delete.");
+  }
+
+  // 2. Delete all products
+  // Coupons will be deleted by the CASCADE constraint on the products table.
+  const { error: productError } = await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (productError) throw new Error(`Error deleting products: ${productError.message}`);
+  console.log("All products and related coupons deleted.");
+
+  console.log("Data cleanup finished.");
+}
+
+async function createTables(supabaseAdmin: any) {
+    console.log("Creating tables...");
+    
+    // Create users table
+    await supabaseAdmin.rpc('run_sql', {
+        sql: `
+        CREATE TABLE IF NOT EXISTS public.users (
+            id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+            full_name VARCHAR(255),
+            role VARCHAR(50) DEFAULT 'sales' CHECK (role IN ('sales', 'manager')),
+            coupon_limit_per_month INT DEFAULT 10
+        );
+        ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
+        CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
+        DROP POLICY IF EXISTS "Managers can update user roles and limits" ON public.users;
+        CREATE POLICY "Managers can update user roles and limits" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        `
+    });
+    console.log("Users table created or already exists.");
+
+    // Create products table
+     await supabaseAdmin.rpc('run_sql', {
+        sql: `
+        CREATE TABLE IF NOT EXISTS public.products (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            price NUMERIC(10, 2) NOT NULL,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Authenticated users can see all products" ON public.products;
+        CREATE POLICY "Authenticated users can see all products" ON public.products FOR SELECT USING (auth.role() = 'authenticated');
+        DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
+        CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        `
+    });
+    console.log("Products table created or already exists.");
+
+    // Create coupons table
+    await supabaseAdmin.rpc('run_sql', {
+        sql: `
+         CREATE TABLE IF NOT EXISTS public.coupons (
+            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            code VARCHAR(255) UNIQUE NOT NULL,
+            discount_percent INT NOT NULL,
+            status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'used')),
+            product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+            user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+            note TEXT,
+            expires_at TIMESTAMP WITH TIME ZONE,
+            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        );
+        ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Users can see their own coupons" ON public.coupons;
+        CREATE POLICY "Users can see their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
+        DROP POLICY IF EXISTS "Managers can see all coupons" ON public.coupons;
+        CREATE POLICY "Managers can see all coupons" ON public.coupons FOR SELECT USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        DROP POLICY IF EXISTS "Users can create coupons" ON public.coupons;
+        CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
+        DROP POLICY IF EXISTS "Users can update their own coupons" ON public.coupons;
+        CREATE POLICY "Users can update their own coupons" ON public.coupons FOR UPDATE USING (auth.uid() = user_id);
+        DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
+        CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        `
+    });
+     console.log("Coupons table created or already exists.");
+}
+
 export async function seedDatabase() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error('Supabase environment variables are not properly configured.');
@@ -17,27 +114,9 @@ export async function seedDatabase() {
   );
 
   console.log("Starting database seed...");
-
-  // ---- 0. Clean up existing data ----
-  const { data: { users: allAuthUsers }, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers();
-  if (listUsersError) throw new Error(`Error listing users: ${listUsersError.message}`);
   
-  if (allAuthUsers.length > 0) {
-    console.log(`Found ${allAuthUsers.length} users in auth. Deleting...`);
-    for (const user of allAuthUsers) {
-      await supabaseAdmin.auth.admin.deleteUser(user.id);
-    }
-    console.log("All auth users deleted.");
-  } else {
-    console.log("No existing auth users to delete.");
-  }
-  
-  // Tables will be empty due to CASCADE on auth.users, but we can be explicit.
-  console.log("Clearing public tables (users, products, coupons)...");
-  await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  console.log("Public tables cleared.");
+  await deleteExistingData(supabaseAdmin);
+  await createTables(supabaseAdmin);
 
   // ---- 1. Seed Users and Profiles ----
   const usersToSeed = [
@@ -45,13 +124,6 @@ export async function seedDatabase() {
       email: 'bahman.f.behtash@gmail.com',
       password: 'Bahman123!',
       full_name: 'بهمن بهتاش',
-      role: 'manager' as const,
-      coupon_limit_per_month: 999,
-    },
-    {
-      email: 'sales_manager@example.com',
-      password: 'password',
-      full_name: 'مدیر فروش',
       role: 'manager' as const,
       coupon_limit_per_month: 999,
     },
@@ -71,7 +143,7 @@ export async function seedDatabase() {
     },
   ];
 
-  const createdUsers = [];
+  const createdUsers: UserProfile[] = [];
   console.log("Seeding users and profiles...");
 
   for (const userData of usersToSeed) {
@@ -87,10 +159,7 @@ export async function seedDatabase() {
     }
     
     const authUser = authData.user;
-    if (!authUser) {
-      console.warn(`User object not returned for ${userData.email}. Skipping profile creation.`);
-      continue;
-    }
+    if (!authUser) continue;
     console.log(`Created auth user: ${authUser.email} with ID: ${authUser.id}`);
 
     const profileData = {
@@ -104,11 +173,11 @@ export async function seedDatabase() {
 
     if (profileError) {
         console.error(`Error creating profile for ${userData.email}:`, profileError);
-        await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+        await supabaseAdmin.auth.admin.deleteUser(authUser.id); // Rollback auth user
         throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
     }
     console.log(`Created profile for: ${authUser.email}`);
-    createdUsers.push({ ...profileData, id: authUser.id }); // Ensure ID is correctly passed
+    createdUsers.push(profileData);
   }
   
   // ---- 2. Seed Products ----
@@ -130,14 +199,16 @@ export async function seedDatabase() {
   // ---- 3. Seed Coupons ----
   console.log("Seeding coupons...");
   if (createdProducts && createdProducts.length > 0 && createdUsers.length > 0) {
-    const salesAgent = createdUsers.find(u => u.role === 'sales');
-    if (salesAgent) {
+    const salesAgent1 = createdUsers.find(u => u.full_name === 'نماینده فروش ۱');
+    const salesAgent2 = createdUsers.find(u => u.full_name === 'نماینده فروش ۲');
+    
+    if (salesAgent1 && salesAgent2) {
       const couponsToSeed: Omit<Coupon, 'id' | 'created_at' | 'code'>[] = [
         {
           discount_percent: 15,
           status: 'active',
           product_id: createdProducts[0].id,
-          user_id: salesAgent.id,
+          user_id: salesAgent1.id,
           note: 'برای مشتری ویژه',
           expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
         },
@@ -145,9 +216,17 @@ export async function seedDatabase() {
           discount_percent: 20,
           status: 'used',
           product_id: createdProducts[1].id,
-          user_id: salesAgent.id,
+          user_id: salesAgent2.id,
           note: 'فروش موفق',
           expires_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        {
+          discount_percent: 10,
+          status: 'expired',
+          product_id: createdProducts[0].id,
+          user_id: salesAgent1.id,
+          note: 'منقضی شده',
+          expires_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
         },
       ];
 
