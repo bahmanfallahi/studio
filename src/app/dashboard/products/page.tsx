@@ -156,10 +156,12 @@ export default function ProductsPage() {
   }, [fetchProducts]);
 
   const handleSave = async (productData: Partial<Product>) => {
+    const isUpdating = !!productData.id;
     let result;
-    if (productData.id) {
+    
+    if (isUpdating) {
       const { id, ...updateData } = productData;
-      result = await updateProduct(id, updateData);
+      result = await updateProduct(id!, updateData);
     } else {
       result = await addProduct(productData as Omit<Product, 'id' | 'created_at'>);
     }
@@ -169,8 +171,8 @@ export default function ProductsPage() {
         return false;
     }
 
-    toast({ title: 'موفقیت', description: `محصول با موفقیت ${productData.id ? 'به‌روز' : 'ایجاد'} شد.` });
-    fetchProducts();
+    await fetchProducts(); // Re-fetch products to update the list
+    toast({ title: 'موفقیت', description: `محصول با موفقیت ${isUpdating ? 'به‌روز' : 'ایجاد'} شد.` });
     return true;
   };
 
@@ -179,8 +181,8 @@ export default function ProductsPage() {
     if (result.error) {
         toast({ variant: 'destructive', title: 'حذف ناموفق', description: result.error.message });
     } else {
+        await fetchProducts(); // Re-fetch products
         toast({ title: 'محصول حذف شد' });
-        fetchProducts();
     }
   };
   
