@@ -11,63 +11,74 @@ export async function seedDatabase() {
 
   const supabaseAdmin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    { auth: { autoRefreshToken: false, persistSession: false } }
   );
 
   try {
     // ---- 1. Seed Users and Profiles ----
-    const usersToSeed: (Omit<UserProfile, 'id'> & { email: string; password_hash: string })[] = [
+    const usersToSeed = [
       {
         email: 'bahman.f.behtash@gmail.com',
-        password_hash: 'Bahman123!',
+        password: 'Bahman123!',
         full_name: 'بهمن بهتاش',
-        role: 'manager',
+        role: 'manager' as const,
         coupon_limit_per_month: 999,
       },
       {
         email: 'sales_manager@example.com',
-        password_hash: 'password',
+        password: 'password',
         full_name: 'مدیر فروش',
-        role: 'manager',
+        role: 'manager' as const,
         coupon_limit_per_month: 999,
       },
       {
         email: 'sales_agent_1@example.com',
-        password_hash: 'password',
+        password: 'password',
         full_name: 'نماینده فروش ۱',
-        role: 'sales',
+        role: 'sales' as const,
         coupon_limit_per_month: 10,
       },
        {
         email: 'sales_agent_2@example.com',
-        password_hash: 'password',
+        password: 'password',
         full_name: 'نماینده فروش ۲',
-        role: 'sales',
+        role: 'sales' as const,
         coupon_limit_per_month: 15,
       },
     ];
 
     const createdUsers = [];
+
+    // First, ensure all users from auth are removed to start fresh
+    const { data: { users: allAuthUsers } } = await supabaseAdmin.auth.admin.listUsers();
+    for (const user of allAuthUsers) {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+    }
+     // Clear existing tables
+    await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('profiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+
+
     for (const userData of usersToSeed) {
-        // Check if user already exists in auth
-        const { data: { users: existingUsers } } = await supabaseAdmin.auth.admin.listUsers({ email: userData.email } as any);
-        let authUser;
+        const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: userData.email,
+            password: userData.password,
+            email_confirm: true,
+        });
 
-        if (existingUsers && existingUsers.length > 0) {
-            authUser = existingUsers[0];
-             // Optionally update password if needed
-            // await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password: userData.password_hash });
-        } else {
-             const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
-                email: userData.email,
-                password: userData.password_hash,
-                email_confirm: true, // Auto-confirm email for simplicity
-            });
-            if (authError) throw new Error(`خطا در ایجاد کاربر ${userData.email}: ${authError.message}`);
-            authUser = data.user;
+        if (authError) {
+             // If user exists, try to get them
+            if (authError.message.includes('User already registered')) {
+                console.warn(`User ${userData.email} already exists in auth. Skipping creation.`);
+                continue;
+            }
+            throw new Error(`خطا در ایجاد کاربر ${userData.email}: ${authError.message}`);
         }
-
-       if (!authUser) continue;
+        
+        const authUser = authData.user;
+        if (!authUser) continue;
 
       const profileData: UserProfile = {
         id: authUser.id,
@@ -76,9 +87,12 @@ export async function seedDatabase() {
         coupon_limit_per_month: userData.coupon_limit_per_month,
       };
       
-      // Upsert profile into the 'profiles' table
-      const { error: profileError } = await supabaseAdmin.from('profiles').upsert(profileData);
-      if (profileError) throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
+      const { error: profileError } = await supabaseAdmin.from('profiles').insert(profileData);
+      if (profileError) {
+        // If the user was created in auth but failed to insert into profiles, delete the auth user for consistency
+        await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+        throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
+      }
       
       createdUsers.push(profileData);
     }
@@ -92,7 +106,7 @@ export async function seedDatabase() {
     
     const { data: createdProducts, error: productsError } = await supabaseAdmin
       .from('products')
-      .upsert(productsToSeed, { onConflict: 'name', ignoreDuplicates: false })
+      .insert(productsToSeed)
       .select();
 
     if (productsError) throw new Error(`خطا در ایجاد محصولات: ${productsError.message}`);
