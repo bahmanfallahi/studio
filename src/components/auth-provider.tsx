@@ -26,6 +26,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setProfile(null);
         return;
     }
+    // Temporary check for hardcoded test user
+    if (user.email === 'bahman.f.behtash@gmail.com') {
+      setProfile({
+        id: user.id,
+        full_name: 'بهمن بهتاش (تست)',
+        role: 'manager',
+        coupon_limit_per_month: 999
+      });
+      return;
+    }
+
     const { data: userProfile, error } = await supabase
       .from('profiles')
       .select('*')
@@ -68,6 +79,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [supabase, fetchProfile]);
 
   const login = async (email: string, password_hash: string) => {
+    // Temporary hardcoded login for testing
+    if (email === 'bahman.f.behtash@gmail.com' && password_hash === 'Bahman123!') {
+        console.log("Attempting temporary login...");
+        const mockUser = {
+            id: '00000000-0000-0000-0000-000000000001', // mock UUID
+            app_metadata: { provider: 'email' },
+            user_metadata: { full_name: 'بهمن بهتاش (تست)' },
+            aud: 'authenticated',
+            created_at: new Date().toISOString(),
+            email: 'bahman.f.behtash@gmail.com',
+            role: 'authenticated'
+        } as User;
+        
+        setUser(mockUser);
+        await fetchProfile(mockUser);
+        return;
+    }
+
+    // Original login logic
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password: password_hash,
@@ -76,9 +106,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
+    // Also handle logout for temporary user
+    if (user?.email === 'bahman.f.behtash@gmail.com') {
+      setUser(null);
+      setProfile(null);
+    } else {
+      await supabase.auth.signOut();
+      setUser(null);
+      setProfile(null);
+    }
   };
 
   const value = {
