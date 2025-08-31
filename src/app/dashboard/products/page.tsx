@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { PlusCircle, MoreHorizontal, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -135,25 +135,30 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchProducts = useCallback(async () => {
+  // Removed useCallback to ensure the function always has the latest scope
+  const fetchProducts = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
+      if (error) throw error;
+      
+      setProducts(data);
+    } catch (error: any) {
       toast({ variant: 'destructive', title: 'خطا در دریافت محصولات', description: error.message });
       console.error("Error fetching products: ", error);
-    } else {
-      setProducts(data);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
-  }, [supabase, toast]);
+  };
   
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSave = async (productData: Partial<Product>) => {
     const isUpdating = !!productData.id;
@@ -171,19 +176,22 @@ export default function ProductsPage() {
         return false;
     }
 
-    await fetchProducts(); // Re-fetch products to update the list
+    // Re-fetch products to update the list, which will solve the refresh issue
+    await fetchProducts(); 
     toast({ title: 'موفقیت', description: `محصول با موفقیت ${isUpdating ? 'به‌روز' : 'ایجاد'} شد.` });
     return true;
   };
 
   const handleDelete = async (productId: string) => {
+    setLoading(true);
     const result = await deleteProduct(productId);
     if (result.error) {
         toast({ variant: 'destructive', title: 'حذف ناموفق', description: result.error.message });
     } else {
-        await fetchProducts(); // Re-fetch products
         toast({ title: 'محصول حذف شد' });
     }
+    // Always re-fetch products after deletion, regardless of success/failure of toast
+    await fetchProducts();
   };
   
   if (profile?.role !== 'manager') {
