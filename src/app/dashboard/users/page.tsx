@@ -157,7 +157,7 @@ export default function UsersPage() {
     // To get auth data like email, we need to make an admin call.
     // Since we can't do that securely on the client, we show a placeholder.
     // A better solution would be a server action or edge function.
-    const { data: profiles, error } = await supabase.from('profiles').select('*');
+    const { data: profiles, error } = await supabase.from('users').select('*');
 
     if (error) {
         toast({ variant: 'destructive', title: 'خطا در دریافت کاربران', description: error.message });

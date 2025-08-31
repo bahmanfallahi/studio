@@ -68,11 +68,11 @@ export default function CouponsPage() {
     setLoading(true);
     try {
       const productsPromise = supabase.from('products').select('*');
-      const usersPromise = profile.role === 'manager' ? supabase.from('profiles').select('*') : Promise.resolve({ data: [profile], error: null });
+      const usersPromise = profile.role === 'manager' ? supabase.from('users').select('*') : Promise.resolve({ data: [profile], error: null });
 
       let couponsQuery = supabase
         .from('coupons')
-        .select('*, products(name), profiles(full_name)')
+        .select('*, products(name), users(full_name)')
         .order('created_at', { ascending: false });
 
       if (profile.role !== 'manager') {
@@ -269,7 +269,7 @@ export default function CouponsPage() {
                 filteredCoupons.map((coupon) => (
                     <TableRow key={coupon.id}>
                       <TableCell className="font-medium text-right">{coupon.code}</TableCell>
-                       {profile.role === 'manager' && <TableCell className="text-right">{coupon.profiles?.full_name || 'N/A'}</TableCell>}
+                       {profile.role === 'manager' && <TableCell className="text-right">{coupon.users?.full_name || 'N/A'}</TableCell>}
                       <TableCell className="text-right">{coupon.products?.name || 'N/A'}</TableCell>
                       <TableCell className="text-right">{coupon.discount_percent}%</TableCell>
                       <TableCell className="text-right">

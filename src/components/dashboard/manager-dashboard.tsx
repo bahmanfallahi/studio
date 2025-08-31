@@ -25,7 +25,7 @@ export default function ManagerDashboard() {
     setError(null);
     try {
       const couponsPromise = supabase.from("coupons").select('status, created_at, expires_at', { count: 'exact' });
-      const agentsPromise = supabase.from("profiles").select('id', { count: 'exact' }).eq('role', 'sales');
+      const agentsPromise = supabase.from("users").select('id', { count: 'exact' }).eq('role', 'sales');
       
       const [
         { data: coupons, error: couponsError, count: totalCoupons },

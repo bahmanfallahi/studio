@@ -24,7 +24,7 @@ export default function SettingsPage() {
     if (currentUser?.role !== 'manager') return;
     setLoading(true);
     const { data: agents, error } = await supabase
-      .from('profiles')
+      .from('users')
       .select('*')
       .eq('role', 'sales');
 
@@ -59,7 +59,7 @@ export default function SettingsPage() {
     
     const updates = Object.keys(limits).map(agentId => 
       supabase
-        .from('profiles')
+        .from('users')
         .update({ coupon_limit_per_month: limits[agentId] })
         .eq('id', agentId)
     );

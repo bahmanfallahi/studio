@@ -33,10 +33,10 @@ export async function seedDatabase() {
   }
   
   // Tables will be empty due to CASCADE on auth.users, but we can be explicit.
-  console.log("Clearing public tables (profiles, products, coupons)...");
+  console.log("Clearing public tables (users, products, coupons)...");
   await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  await supabaseAdmin.from('profiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   console.log("Public tables cleared.");
 
   // ---- 1. Seed Users and Profiles ----
@@ -100,7 +100,7 @@ export async function seedDatabase() {
         coupon_limit_per_month: userData.coupon_limit_per_month,
     };
   
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert(profileData);
+    const { error: profileError } = await supabaseAdmin.from('users').insert(profileData);
 
     if (profileError) {
         console.error(`Error creating profile for ${userData.email}:`, profileError);

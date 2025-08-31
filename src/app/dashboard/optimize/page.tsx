@@ -16,7 +16,7 @@ export default function OptimizePage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const usersPromise = supabase.from('profiles').select('*').eq('role', 'sales');
+      const usersPromise = supabase.from('users').select('*').eq('role', 'sales');
       const productsPromise = supabase.from('products').select('*').eq('is_active', true);
 
       const [
