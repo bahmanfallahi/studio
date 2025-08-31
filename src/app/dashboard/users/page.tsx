@@ -54,6 +54,7 @@ import { createClient } from '@/lib/supabase';
 import { type User } from '@supabase/supabase-js';
 
 type EditableUser = Partial<UserProfile> & { email?: string, password?: string };
+type UserWithAuth = UserProfile & { user?: User };
 
 function UserForm({
   user: initialUser,
@@ -142,32 +143,37 @@ export default function UsersPage() {
   const { profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
   const supabase = createClient();
-  const [users, setUsers] = useState<(UserProfile & { user: User })[]>([]);
+  const [users, setUsers] = useState<UserWithAuth[]>([]);
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    // This needs to be an admin call to get all users
-    // For now, let's assume we create a server action or API route for this.
-    // As a temporary workaround, we will fetch profiles and try to match them.
-    const { data, error } = await supabase.from('profiles').select('*, user:users(*)');
+    // This needs to be an admin call to get all users.
+    // For now we assume RLS is set up for managers to read profiles.
+    // We will simulate joining with auth.users data.
+    const { data: profiles, error } = await supabase.from('profiles').select('*');
 
     if (error) {
         toast({ variant: 'destructive', title: 'خطا در دریافت کاربران', description: error.message });
         console.error("Error fetching users: ", error);
+        setUsers([]);
     } else {
-        // This is a placeholder, as fetching all users requires admin privileges
-        // and a dedicated server-side function.
-        // The `user` field will likely be empty.
-        setUsers(data as any);
+        // This is a client-side simulation. For production, a server-side fetch would be better.
+        const usersWithAuthData = profiles.map(profile => ({
+            ...profile,
+            user: { email: 'ایمیل در دسترس نیست', created_at: 'تاریخ در دسترس نیست'} // Placeholder
+        }));
+        setUsers(usersWithAuthData as any);
     }
     setLoading(false);
   }, [supabase, toast]);
 
   useEffect(() => {
-    fetchUsers();
-  }, [fetchUsers]);
+    if (currentUserProfile?.role === 'manager') {
+      fetchUsers();
+    }
+  }, [fetchUsers, currentUserProfile]);
   
   const handleSave = async (userData: EditableUser) => {
     // Creating/updating users requires admin privileges. 
@@ -234,21 +240,21 @@ export default function UsersPage() {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium text-right">{user.full_name}</TableCell>
-                  <TableCell className="text-right">{user.user?.email}</TableCell>
+                  <TableCell className="text-right">{user.user?.email || 'N/A'}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant={user.role === 'manager' ? 'default' : 'secondary'}>
                       {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
-                  <TableCell className="text-right">{user.user?.created_at ? new Date(user.user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
+                   <TableCell className="text-right">{user.user?.created_at && user.user.created_at !== 'تاریخ در دسترس نیست' ? new Date(user.user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
                   <TableCell className="text-center">
                     <AlertDialog>
                        <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">باز کردن منو</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingUser({ ...user, email: user.user.email })}>ویرایش</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditingUser({ ...user, email: user.user?.email })}>ویرایش</DropdownMenuItem>
                           <AlertDialogTrigger asChild>
                               <DropdownMenuItem className="text-red-600" disabled={user.id === currentUserProfile?.id}>حذف</DropdownMenuItem>
                           </AlertDialogTrigger>

@@ -49,12 +49,14 @@ export async function seedDatabase() {
 
     const createdUsers = [];
     for (const userData of usersToSeed) {
-        // Check if user already exists
+        // Check if user already exists in auth
         const { data: { users: existingUsers } } = await supabaseAdmin.auth.admin.listUsers({ email: userData.email } as any);
         let authUser;
 
         if (existingUsers && existingUsers.length > 0) {
             authUser = existingUsers[0];
+             // Optionally update password if needed
+            // await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password: userData.password_hash });
         } else {
              const { data, error: authError } = await supabaseAdmin.auth.admin.createUser({
                 email: userData.email,
@@ -73,7 +75,8 @@ export async function seedDatabase() {
         role: userData.role,
         coupon_limit_per_month: userData.coupon_limit_per_month,
       };
-
+      
+      // Upsert profile into the 'profiles' table
       const { error: profileError } = await supabaseAdmin.from('profiles').upsert(profileData);
       if (profileError) throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
       
@@ -89,7 +92,7 @@ export async function seedDatabase() {
     
     const { data: createdProducts, error: productsError } = await supabaseAdmin
       .from('products')
-      .upsert(productsToSeed, { onConflict: 'name', ignoreDuplicates: true })
+      .upsert(productsToSeed, { onConflict: 'name', ignoreDuplicates: false })
       .select();
 
     if (productsError) throw new Error(`خطا در ایجاد محصولات: ${productsError.message}`);

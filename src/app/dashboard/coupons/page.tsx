@@ -91,7 +91,7 @@ export default function CouponsPage() {
 
       setProducts(productsList as Product[]);
       setUsers(usersList as UserProfile[]);
-      setCoupons(couponsList as Coupon[]);
+      setCoupons(couponsList as any[]);
 
     } catch (error: any) {
       console.error("Error fetching data: ", error);

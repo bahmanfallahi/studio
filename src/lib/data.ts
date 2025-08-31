@@ -29,5 +29,5 @@ export type Coupon = {
   created_at: string;
   // Joined data from other tables
   products?: { name: string };
-  users?: { full_name: string };
+  profiles?: { full_name: string };
 };
