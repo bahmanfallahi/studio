@@ -1,17 +1,17 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Ticket, Clock, CheckCircle, Users, LoaderCircle, AlertTriangle } from 'lucide-react';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Coupon, User } from '@/lib/data';
+import { Coupon, UserProfile } from '@/lib/data';
 import { subMonths, format, startOfMonth, addMonths } from 'date-fns';
 import { faIR } from 'date-fns/locale';
+import { createClient } from '@/lib/supabase';
 
 export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const supabase = createClient();
   const [stats, setStats] = useState({
     totalCoupons: 0,
     usageRate: 0,
@@ -20,63 +20,72 @@ export default function ManagerDashboard() {
   });
   const [chartData, setChartData] = useState<any[]>([]);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const couponsSnapshot = await getDocs(collection(db, "coupons"));
-        const coupons = couponsSnapshot.docs.map(doc => doc.data() as Coupon);
-        
-        const usersSnapshot = await getDocs(query(collection(db, "users"), where("role", "==", "sales")));
-        const activeAgents = usersSnapshot.size;
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const couponsPromise = supabase.from("coupons").select('*', { count: 'exact' });
+      const agentsPromise = supabase.from("profiles").select('id', { count: 'exact' }).eq('role', 'sales');
+      
+      const [
+        { data: coupons, error: couponsError, count: totalCoupons },
+        { error: agentsError, count: activeAgents }
+      ] = await Promise.all([couponsPromise, agentsPromise]);
 
-        const totalCoupons = coupons.length;
-        const usedCoupons = coupons.filter(c => c.status === 'used').length;
-        const activeCoupons = coupons.filter(c => c.status === 'active' && new Date(c.expires_at) > new Date()).length;
-        const usageRate = totalCoupons > 0 ? (usedCoupons / totalCoupons) * 100 : 0;
+      if (couponsError) throw couponsError;
+      if (agentsError) throw agentsError;
 
-        setStats({ totalCoupons, usageRate, activeCoupons, activeAgents });
+      const usedCoupons = coupons.filter(c => c.status === 'used').length;
+      const activeCoupons = coupons.filter(c => c.status === 'active' && new Date(c.expires_at) > new Date()).length;
+      const usageRate = totalCoupons > 0 ? (usedCoupons / totalCoupons) * 100 : 0;
 
-        // Prepare chart data for the last 6 months
-        const monthlyData: { [key: string]: { created: number; used: number } } = {};
-        const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
+      setStats({ 
+        totalCoupons: totalCoupons || 0, 
+        usageRate, 
+        activeCoupons, 
+        activeAgents: activeAgents || 0 
+      });
 
-        for (let i = 0; i < 6; i++) {
-            const month = format(addMonths(sixMonthsAgo, i), 'MMM', { locale: faIR });
-            monthlyData[month] = { created: 0, used: 0 };
-        }
+      // Prepare chart data for the last 6 months
+      const monthlyData: { [key: string]: { created: number; used: number } } = {};
+      const sixMonthsAgo = startOfMonth(subMonths(new Date(), 5));
 
-        coupons.forEach(coupon => {
-            const createdAt = new Date(coupon.created_at);
-            if (createdAt >= sixMonthsAgo) {
-                const month = format(createdAt, 'MMM', { locale: faIR });
-                if (monthlyData[month]) {
-                    monthlyData[month].created++;
-                    if (coupon.status === 'used') {
-                        monthlyData[month].used++;
-                    }
-                }
-            }
-        });
-        
-        const formattedChartData = Object.keys(monthlyData).map(name => ({
-            name,
-            'ساخته شده': monthlyData[name].created,
-            'استفاده شده': monthlyData[name].used
-        }));
-
-        setChartData(formattedChartData);
-
-      } catch (err) {
-        console.error("Error fetching manager dashboard data: ", err);
-        setError("امکان بارگذاری داده‌های داشبورد وجود نداشت. لطفاً بعداً دوباره تلاش کنید.");
+      for (let i = 0; i < 6; i++) {
+          const month = format(addMonths(sixMonthsAgo, i), 'MMM', { locale: faIR });
+          monthlyData[month] = { created: 0, used: 0 };
       }
-      setLoading(false);
-    };
 
+      coupons.forEach(coupon => {
+          const createdAt = new Date(coupon.created_at);
+          if (createdAt >= sixMonthsAgo) {
+              const month = format(createdAt, 'MMM', { locale: faIR });
+              if (monthlyData[month]) {
+                  monthlyData[month].created++;
+                  if (coupon.status === 'used') {
+                      monthlyData[month].used++;
+                  }
+              }
+          }
+      });
+      
+      const formattedChartData = Object.keys(monthlyData).map(name => ({
+          name,
+          'ساخته شده': monthlyData[name].created,
+          'استفاده شده': monthlyData[name].used
+      }));
+
+      setChartData(formattedChartData);
+
+    } catch (err: any) {
+      console.error("Error fetching manager dashboard data: ", err);
+      setError("امکان بارگذاری داده‌های داشبورد وجود نداشت. لطفاً بعداً دوباره تلاش کنید.");
+    }
+    setLoading(false);
+  }, [supabase]);
+
+  useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   if (loading) {
     return (

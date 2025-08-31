@@ -142,6 +142,7 @@ export default function CouponsPage() {
       
       if (error) {
         console.error("Error adding coupon: ", error);
+        toast({ variant: 'destructive', title: 'ساخت ناموفق', description: 'امکان ساخت کوپن وجود نداشت. لطفاً دوباره تلاش کنید.' });
         return false;
       }
       fetchData(); // Refetch all data to get the new coupon

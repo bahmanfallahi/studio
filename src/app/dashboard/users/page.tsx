@@ -53,27 +53,32 @@ import {
 import { createClient } from '@/lib/supabase';
 import { type User } from '@supabase/supabase-js';
 
-type EditableUser = Partial<UserProfile> & { email?: string, password?: string };
-type UserWithAuth = UserProfile & { user?: User };
+// This type joins the profile with the auth user data
+type UserWithAuth = UserProfile & { auth_user?: { email?: string, created_at?: string } };
 
 function UserForm({
   user: initialUser,
   onSave,
   onClose,
 }: {
-  user: EditableUser | null;
-  onSave: (user: EditableUser) => Promise<boolean>;
+  user: Partial<UserWithAuth> | null;
+  onSave: (user: Partial<UserWithAuth>) => Promise<boolean>;
   onClose: () => void;
 }) {
-  const [formData, setFormData] = useState<EditableUser>(
-    initialUser || { full_name: '', email: '', role: 'sales', coupon_limit_per_month: 10 }
+  const [formData, setFormData] = useState<Partial<UserWithAuth>>(
+    initialUser || { full_name: '', auth_user: { email: ''}, role: 'sales', coupon_limit_per_month: 10 }
   );
   const [isSaving, setIsSaving] = useState(false);
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
+    
+    if (name === 'email') {
+        setFormData(prev => ({...prev, auth_user: {...prev.auth_user, email: value}}));
+    } else {
+        setFormData((prev) => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
+    }
   };
 
   const handleRoleChange = (value: 'sales' | 'manager') => {
@@ -106,7 +111,7 @@ function UserForm({
           </div>
           <div>
             <Label htmlFor="email">ایمیل</Label>
-            <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} required disabled={!!initialUser.id} />
+            <Input id="email" name="email" type="email" value={formData.auth_user?.email || ''} onChange={handleChange} required disabled={!!initialUser.id} />
           </div>
            <div>
             <Label htmlFor="password">رمز عبور</Label>
@@ -144,14 +149,14 @@ export default function UsersPage() {
   const { toast } = useToast();
   const supabase = createClient();
   const [users, setUsers] = useState<UserWithAuth[]>([]);
-  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [editingUser, setEditingUser] = useState<Partial<UserWithAuth> | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
-    // This needs to be an admin call to get all users.
-    // For now we assume RLS is set up for managers to read profiles.
-    // We will simulate joining with auth.users data.
+    // To get auth data like email, we need to make an admin call.
+    // Since we can't do that securely on the client, we show a placeholder.
+    // A better solution would be a server action or edge function.
     const { data: profiles, error } = await supabase.from('profiles').select('*');
 
     if (error) {
@@ -159,12 +164,11 @@ export default function UsersPage() {
         console.error("Error fetching users: ", error);
         setUsers([]);
     } else {
-        // This is a client-side simulation. For production, a server-side fetch would be better.
         const usersWithAuthData = profiles.map(profile => ({
             ...profile,
-            user: { email: 'ایمیل در دسترس نیست', created_at: 'تاریخ در دسترس نیست'} // Placeholder
+            auth_user: { email: 'ایمیل در دسترس نیست', created_at: 'تاریخ در دسترس نیست'} // Placeholder
         }));
-        setUsers(usersWithAuthData as any);
+        setUsers(usersWithAuthData as any[]);
     }
     setLoading(false);
   }, [supabase, toast]);
@@ -175,7 +179,7 @@ export default function UsersPage() {
     }
   }, [fetchUsers, currentUserProfile]);
   
-  const handleSave = async (userData: EditableUser) => {
+  const handleSave = async (userData: Partial<UserWithAuth>) => {
     // Creating/updating users requires admin privileges. 
     // This should be moved to a server action / API route with admin client.
     // The client-side implementation is for demonstration purposes.
@@ -215,7 +219,7 @@ export default function UsersPage() {
           <h1 className="text-3xl font-bold font-headline tracking-tight">کاربران</h1>
           <p className="text-muted-foreground">تیم نمایندگان فروش و مدیران خود را مدیریت کنید. (عملیات نوشتن غیرفعال است)</p>
         </div>
-        <Button onClick={() => setEditingUser({ full_name: '', email: '', role: 'sales', coupon_limit_per_month: 10 })}>
+        <Button onClick={() => setEditingUser({ full_name: '', auth_user: { email: ''}, role: 'sales', coupon_limit_per_month: 10 })}>
           <PlusCircle className="ml-2 h-4 w-4" /> افزودن کاربر
         </Button>
       </div>
@@ -240,21 +244,21 @@ export default function UsersPage() {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium text-right">{user.full_name}</TableCell>
-                  <TableCell className="text-right">{user.user?.email || 'N/A'}</TableCell>
+                  <TableCell className="text-right">{user.auth_user?.email || 'N/A'}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant={user.role === 'manager' ? 'default' : 'secondary'}>
                       {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
-                   <TableCell className="text-right">{user.user?.created_at && user.user.created_at !== 'تاریخ در دسترس نیست' ? new Date(user.user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
+                   <TableCell className="text-right">{user.auth_user?.created_at && user.auth_user.created_at !== 'تاریخ در دسترس نیست' ? new Date(user.auth_user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
                   <TableCell className="text-center">
                     <AlertDialog>
                        <DropdownMenu>
                         <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">باز کردن منو</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-                          <DropdownMenuItem onClick={() => setEditingUser({ ...user, email: user.user?.email })}>ویرایش</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => setEditingUser({ ...user })}>ویرایش</DropdownMenuItem>
                           <AlertDialogTrigger asChild>
                               <DropdownMenuItem className="text-red-600" disabled={user.id === currentUserProfile?.id}>حذف</DropdownMenuItem>
                           </AlertDialogTrigger>

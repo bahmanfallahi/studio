@@ -16,6 +16,27 @@ export async function seedDatabase() {
   );
 
   try {
+    // ---- 0. Clean up existing data ----
+    console.log("Starting database seed...");
+
+    // First, ensure all users from auth are removed to start fresh
+    const { data: { users: allAuthUsers }, error: listUsersError } = await supabaseAdmin.auth.admin.listUsers();
+    if(listUsersError) throw new Error(`Error listing users: ${listUsersError.message}`);
+    
+    console.log(`Found ${allAuthUsers.length} users in auth. Deleting...`);
+    for (const user of allAuthUsers) {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+    }
+    console.log("All auth users deleted.");
+
+    // Clear existing public tables. The CASCADE in the table definitions will handle this, but we do it explicitly.
+    console.log("Deleting data from public tables...");
+    await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    await supabaseAdmin.from('profiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    console.log("Public tables cleared.");
+
+
     // ---- 1. Seed Users and Profiles ----
     const usersToSeed = [
       {
@@ -49,17 +70,7 @@ export async function seedDatabase() {
     ];
 
     const createdUsers = [];
-
-    // First, ensure all users from auth are removed to start fresh
-    const { data: { users: allAuthUsers } } = await supabaseAdmin.auth.admin.listUsers();
-    for (const user of allAuthUsers) {
-        await supabaseAdmin.auth.admin.deleteUser(user.id);
-    }
-     // Clear existing tables
-    await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabaseAdmin.from('profiles').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-
+    console.log("Seeding users...");
 
     for (const userData of usersToSeed) {
         const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -69,35 +80,32 @@ export async function seedDatabase() {
         });
 
         if (authError) {
-             // If user exists, try to get them
-            if (authError.message.includes('User already registered')) {
-                console.warn(`User ${userData.email} already exists in auth. Skipping creation.`);
-                continue;
-            }
             throw new Error(`خطا در ایجاد کاربر ${userData.email}: ${authError.message}`);
         }
         
         const authUser = authData.user;
         if (!authUser) continue;
+        console.log(`Created auth user: ${authUser.email}`);
 
-      const profileData: UserProfile = {
-        id: authUser.id,
-        full_name: userData.full_name,
-        role: userData.role,
-        coupon_limit_per_month: userData.coupon_limit_per_month,
-      };
+        const profileData: UserProfile = {
+            id: authUser.id,
+            full_name: userData.full_name,
+            role: userData.role,
+            coupon_limit_per_month: userData.coupon_limit_per_month,
+        };
       
-      const { error: profileError } = await supabaseAdmin.from('profiles').insert(profileData);
-      if (profileError) {
-        // If the user was created in auth but failed to insert into profiles, delete the auth user for consistency
-        await supabaseAdmin.auth.admin.deleteUser(authUser.id);
-        throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
-      }
-      
-      createdUsers.push(profileData);
+        const { error: profileError } = await supabaseAdmin.from('profiles').insert(profileData);
+        if (profileError) {
+            // If the user was created in auth but failed to insert into profiles, delete the auth user for consistency
+            await supabaseAdmin.auth.admin.deleteUser(authUser.id);
+            throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
+        }
+        console.log(`Created profile for: ${authUser.email}`);
+        createdUsers.push(profileData);
     }
     
     // ---- 2. Seed Products ----
+    console.log("Seeding products...");
     const productsToSeed: Omit<Product, 'id' | 'created_at'>[] = [
       { name: 'مودم فیبر نوری هواوی', description: 'مودم پرسرعت با پوشش‌دهی عالی', price: 150, is_active: true },
       { name: 'مودم فیبر نوری ZTE', description: 'مودم اقتصادی و باکیفیت', price: 120, is_active: true },
@@ -110,8 +118,10 @@ export async function seedDatabase() {
       .select();
 
     if (productsError) throw new Error(`خطا در ایجاد محصولات: ${productsError.message}`);
+    console.log(`${createdProducts.length} products seeded.`);
 
     // ---- 3. Seed Coupons ----
+    console.log("Seeding coupons...");
     if (createdProducts && createdProducts.length > 0) {
       const salesAgent = createdUsers.find(u => u.role === 'sales');
       if (salesAgent) {
@@ -143,9 +153,10 @@ export async function seedDatabase() {
                 throw new Error(`خطا در ایجاد کوپن: ${couponError.message}`);
            }
         }
+        console.log(`${couponsToSeed.length} coupons seeded.`);
       }
     }
-
+    console.log("Database seed completed successfully.");
     return { success: true, message: 'پایگاه داده با موفقیت با داده‌های اولیه پر شد. کاربران، محصولات و کوپن‌ها ایجاد شدند.' };
   } catch (error: any) {
     console.error("Database seeding failed:", error);
