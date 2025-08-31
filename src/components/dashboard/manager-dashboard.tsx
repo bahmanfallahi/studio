@@ -24,7 +24,7 @@ export default function ManagerDashboard() {
     setLoading(true);
     setError(null);
     try {
-      const couponsPromise = supabase.from("coupons").select('*', { count: 'exact' });
+      const couponsPromise = supabase.from("coupons").select('status, created_at, expires_at', { count: 'exact' });
       const agentsPromise = supabase.from("profiles").select('id', { count: 'exact' }).eq('role', 'sales');
       
       const [
@@ -37,7 +37,7 @@ export default function ManagerDashboard() {
 
       const usedCoupons = coupons.filter(c => c.status === 'used').length;
       const activeCoupons = coupons.filter(c => c.status === 'active' && new Date(c.expires_at) > new Date()).length;
-      const usageRate = totalCoupons > 0 ? (usedCoupons / totalCoupons) * 100 : 0;
+      const usageRate = totalCoupons && totalCoupons > 0 ? (usedCoupons / totalCoupons) * 100 : 0;
 
       setStats({ 
         totalCoupons: totalCoupons || 0, 
@@ -77,7 +77,7 @@ export default function ManagerDashboard() {
       setChartData(formattedChartData);
 
     } catch (err: any) {
-      console.error("Error fetching manager dashboard data: ", err);
+      console.error("Error fetching manager dashboard data: ", err.message || err);
       setError("امکان بارگذاری داده‌های داشبورد وجود نداشت. لطفاً بعداً دوباره تلاش کنید.");
     }
     setLoading(false);
