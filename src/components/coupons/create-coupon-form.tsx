@@ -82,7 +82,9 @@ export default function CreateCouponForm({
 
     const currentCount = count || 0;
     setCouponsThisMonth(currentCount);
-    setCanCreate(currentCount < userProfile.coupon_limit_per_month);
+    if(userProfile.coupon_limit_per_month !== null){
+      setCanCreate(currentCount < userProfile.coupon_limit_per_month);
+    }
   }, [userProfile, isOpen, supabase]);
 
 
@@ -124,9 +126,8 @@ export default function CreateCouponForm({
       toast({ title: 'کوپن ساخته شد!', description: 'کوپن جدید به لیست شما اضافه شد.' });
       setIsOpen(false);
       reset();
-    } else {
-       toast({ variant: 'destructive', title: 'ساخت ناموفق', description: 'امکان ساخت کوپن وجود نداشت. لطفاً دوباره تلاش کنید.' });
     }
+    // The parent component will show the error toast
     setIsSubmitting(false);
   };
 

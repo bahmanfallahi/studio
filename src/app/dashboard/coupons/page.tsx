@@ -46,6 +46,8 @@ import CreateCouponForm from '@/components/coupons/create-coupon-form';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
 import { createClient } from '@/lib/supabase';
+import { addCoupon, updateCouponStatus, deleteCoupon } from './actions';
+
 
 export default function CouponsPage() {
   const { profile } = useAuth();
@@ -132,49 +134,41 @@ export default function CouponsPage() {
     return result;
   }, [coupons, profile, statusFilter, agentFilter]);
 
-  const addCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
+  const handleAddCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
       const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ').join('').toUpperCase() || 'COUPON';
       const code = `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`;
-
-      const { error } = await supabase
-        .from('coupons')
-        .insert({ ...newCouponData, code });
+      
+      const { success, error } = await addCoupon(newCouponData, code);
       
       if (error) {
         console.error("Error adding coupon: ", error);
         toast({ variant: 'destructive', title: 'ساخت ناموفق', description: 'امکان ساخت کوپن وجود نداشت. لطفاً دوباره تلاش کنید.' });
         return false;
       }
-      fetchData(); // Refetch all data to get the new coupon
+      await fetchData(); // Refetch all data to get the new coupon
       return true;
   };
   
   const handleUpdateStatus = async (couponId: string, status: 'expired' | 'used') => {
-    const { error } = await supabase
-      .from('coupons')
-      .update({ status })
-      .eq('id', couponId);
+    const { success, error } = await updateCouponStatus(couponId, status);
 
     if (error) {
       console.error(`Error updating coupon to ${status}:`, error);
       toast({ variant: "destructive", title: "بروزرسانی ناموفق", description: `امکان بروزرسانی کوپن وجود نداشت.` });
     } else {
-      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status } : c));
+      await fetchData();
       toast({ title: `کوپن ${status === 'used' ? 'استفاده شده' : 'منقضی'} شد`, description: `کوپن به عنوان ${status === 'used' ? 'استفاده شده' : 'منقضی'} علامت‌گذاری شد.` });
     }
   };
 
   const handleDelete = async (couponId: string) => {
-    const { error } = await supabase
-      .from('coupons')
-      .delete()
-      .eq('id', couponId);
+    const { success, error } = await deleteCoupon(couponId);
 
     if (error) {
       console.error("Error deleting coupon:", error);
       toast({ variant: "destructive", title: "حذف ناموفق", description: "امکان حذف کوپن وجود نداشت." });
     } else {
-      setCoupons(prev => prev.filter(c => c.id !== couponId));
+      await fetchData();
       toast({ title: "کوپن حذف شد", description: "کوپن برای همیشه حذف شد." });
     }
   };
@@ -202,7 +196,7 @@ export default function CouponsPage() {
         setIsOpen={setCreateOpen}
         products={products.filter(p => p.is_active)}
         userProfile={profile}
-        onCouponCreate={addCoupon}
+        onCouponCreate={handleAddCoupon}
       />
 
       <Card>
