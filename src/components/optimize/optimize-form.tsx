@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Product, User } from '@/lib/data';
+import { Product, UserProfile } from '@/lib/data';
 import { Sparkles, LoaderCircle, Lightbulb } from 'lucide-react';
 
 const optimizeSchema = z.object({
@@ -25,7 +25,7 @@ type OptimizeFormData = z.infer<typeof optimizeSchema>;
 
 interface OptimizeFormProps {
   products: Product[];
-  salesAgents: User[];
+  salesAgents: UserProfile[];
 }
 
 export default function OptimizeForm({ products, salesAgents }: OptimizeFormProps) {

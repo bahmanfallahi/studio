@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import DbTester from '@/components/db-tester';
 
 export default function LoginPage() {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const { login, user, loading } = useAuth();
@@ -30,7 +30,7 @@ export default function LoginPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await login(username, password);
+      await login(email, password);
       toast({
         title: 'ورود موفقیت‌آمیز',
         description: "خوش آمدید!",
@@ -42,6 +42,7 @@ export default function LoginPage() {
         title: 'ورود ناموفق',
         description: (error as Error).message,
       });
+    } finally {
       setIsLoading(false);
     }
   };
@@ -63,14 +64,14 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">نام کاربری (ایمیل)</Label>
+              <Label htmlFor="email">ایمیل</Label>
               <Input
-                id="username"
-                type="text"
-                placeholder="sales_agent_1"
+                id="email"
+                type="email"
+                placeholder="you@example.com"
                 required
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isLoading}
               />
             </div>

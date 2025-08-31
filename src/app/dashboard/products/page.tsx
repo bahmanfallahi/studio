@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PlusCircle, MoreHorizontal, LoaderCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
-  CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
@@ -52,8 +51,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { createClient } from '@/lib/supabase';
 
 
 function ProductForm({
@@ -62,7 +60,7 @@ function ProductForm({
   onClose,
 }: {
   product: Partial<Product> | null;
-  onSave: (product: Product) => Promise<boolean>;
+  onSave: (product: Omit<Product, 'id' | 'created_at'>) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<Product>>(
@@ -72,8 +70,7 @@ function ProductForm({
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
-    const isNumber = type === 'number';
-    setFormData((prev) => ({ ...prev, [name]: isNumber ? parseFloat(value) : value }));
+    setFormData((prev) => ({ ...prev, [name]: type === 'number' ? parseFloat(value) : value }));
   };
 
   const handleSwitchChange = (checked: boolean) => {
@@ -83,13 +80,10 @@ function ProductForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    // Ensure the ID is passed along for updates
-    const dataToSave = { ...product, ...formData };
-    const success = await onSave(dataToSave as Product);
+    const dataToSave = { ...formData };
+    const success = await onSave(dataToSave as Omit<Product, 'id' | 'created_at'>);
     setIsSaving(false);
-    if (success) {
-      onClose();
-    }
+    if (success) onClose();
   };
 
   if (!product) return null;
@@ -134,77 +128,72 @@ function ProductForm({
 }
 
 export default function ProductsPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const { toast } = useToast();
+  const supabase = createClient();
   const [products, setProducts] = useState<Product[]>([]);
   const [editingProduct, setEditingProduct] = useState<Partial<Product> | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      toast({ variant: 'destructive', title: 'خطا در دریافت محصولات', description: error.message });
+      console.error("Error fetching products: ", error);
+    } else {
+      setProducts(data);
+    }
+    setLoading(false);
+  }, [supabase, toast]);
+  
   useEffect(() => {
-    const fetchProducts = async () => {
-      setLoading(true);
-      try {
-        const productsCollection = collection(db, "products");
-        const productsSnapshot = await getDocs(productsCollection);
-        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-        setProducts(productsList.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()));
-      } catch (error) {
-        toast({
-          variant: 'destructive',
-          title: 'خطا در دریافت محصولات',
-          description: 'امکان بارگذاری محصولات از پایگاه داده وجود نداشت.',
-        });
-        console.error("Error fetching products: ", error);
-      }
-      setLoading(false);
-    };
-
     fetchProducts();
-  }, [toast]);
+  }, [fetchProducts]);
 
-  const handleSave = async (productData: Product) => {
-    try {
-      if (productData.id) {
-        // Edit
-        const productRef = doc(db, "products", productData.id);
-        await setDoc(productRef, productData, { merge: true });
-        setProducts(products.map(p => p.id === productData.id ? { ...p, ...productData } : p));
-        toast({ title: "محصول به‌روز شد", description: `${productData.name} با موفقیت به‌روزرسانی شد.` });
-      } else {
-        // Add
-        const newProductData: Omit<Product, 'id'> = {
-          name: productData.name!,
-          description: productData.description!,
-          price: productData.price!,
-          is_active: productData.is_active!,
-          created_at: new Date().toISOString(),
-        };
-        const docRef = await addDoc(collection(db, "products"), newProductData);
-        const newProduct: Product = { ...newProductData, id: docRef.id };
-        setProducts(prev => [newProduct, ...prev]);
-        toast({ title: "محصول اضافه شد", description: `${newProduct.name} با موفقیت اضافه شد.` });
-      }
-      setEditingProduct(null);
-      return true;
-    } catch (error) {
+  const handleSave = async (productData: Omit<Product, 'id' | 'created_at'>) => {
+    let error;
+    if (editingProduct?.id) { // Editing existing product
+      const { error: updateError } = await supabase
+        .from('products')
+        .update(productData)
+        .eq('id', editingProduct.id);
+      error = updateError;
+    } else { // Adding new product
+      const { error: insertError } = await supabase
+        .from('products')
+        .insert(productData);
+      error = insertError;
+    }
+
+    if (error) {
       console.error("Error saving product: ", error);
-      toast({ variant: "destructive", title: "ذخیره ناموفق", description: "امکان ذخیره محصول در پایگاه داده وجود نداشت." });
+      toast({ variant: "destructive", title: "ذخیره ناموفق", description: error.message });
       return false;
     }
+
+    toast({ title: editingProduct?.id ? "محصول به‌روز شد" : "محصول اضافه شد" });
+    setEditingProduct(null);
+    fetchProducts(); // Refresh list
+    return true;
   };
 
   const handleDelete = async (productId: string) => {
-    try {
-        await deleteDoc(doc(db, "products", productId));
-        setProducts(products.filter(p => p.id !== productId));
-        toast({ title: "محصول حذف شد", description: `محصول با موفقیت حذف شد.` });
-    } catch (error) {
-        console.error("Error deleting product: ", error);
-        toast({ variant: 'destructive', title: "حذف ناموفق", description: "امکان حذف محصول از پایگاه داده وجود نداشت." });
+    const { error } = await supabase.from('products').delete().eq('id', productId);
+    if (error) {
+      console.error("Error deleting product: ", error);
+      toast({ variant: 'destructive', title: "حذف ناموفق", description: error.message });
+    } else {
+      toast({ title: "محصول حذف شد", description: `محصول با موفقیت حذف شد.` });
+      fetchProducts(); // Refresh list
     }
   };
   
-  if (user?.role !== 'manager') {
+  if (profile?.role !== 'manager') {
     return (
       <div className="text-center py-10">
         <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>
@@ -227,7 +216,7 @@ export default function ProductsPage() {
           <h1 className="text-3xl font-bold font-headline tracking-tight">محصولات</h1>
           <p className="text-muted-foreground">موجودی مودم‌ها و سایر محصولات خود را مدیریت کنید.</p>
         </div>
-        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true, created_at: new Date().toISOString() })}>
+        <Button onClick={() => setEditingProduct({ name: '', description: '', price: 0, is_active: true })}>
           <PlusCircle className="ml-2 h-4 w-4" /> افزودن محصول
         </Button>
       </div>
@@ -235,9 +224,7 @@ export default function ProductsPage() {
       <Card>
         <CardContent className="pt-6">
           {loading ? (
-             <div className="flex items-center justify-center h-48">
-                <LoaderCircle className="h-10 w-10 animate-spin" />
-             </div>
+             <div className="flex items-center justify-center h-48"><LoaderCircle className="h-10 w-10 animate-spin" /></div>
           ) : (
           <Table>
             <TableHeader>
@@ -246,10 +233,7 @@ export default function ProductsPage() {
                 <TableHead className="text-right">وضعیت</TableHead>
                 <TableHead className="text-right">قیمت</TableHead>
                 <TableHead className="text-right">تاریخ ایجاد</TableHead>
-                <TableHead className="text-center">
-                  <span className="sr-only">عملیات</span>
-                  عملیات
-                </TableHead>
+                <TableHead className="text-center">عملیات</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -266,26 +250,17 @@ export default function ProductsPage() {
                   <TableCell className="text-center">
                     <AlertDialog>
                       <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">باز کردن منو</span>
-                          </Button>
-                        </DropdownMenuTrigger>
+                        <DropdownMenuTrigger asChild><Button aria-haspopup="true" size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /><span className="sr-only">باز کردن منو</span></Button></DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>عملیات</DropdownMenuLabel>
                           <DropdownMenuItem onClick={() => setEditingProduct(product)}>ویرایش</DropdownMenuItem>
-                           <AlertDialogTrigger asChild>
-                            <DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem>
-                          </AlertDialogTrigger>
+                           <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem></AlertDialogTrigger>
                         </DropdownMenuContent>
                       </DropdownMenu>
                       <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>آیا کاملاً مطمئن هستید؟</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              این عملیات قابل بازگشت نیست. این کار محصول را برای همیشه حذف کرده و ممکن است روی کوپن‌های موجود تأثیر بگذارد.
-                            </AlertDialogDescription>
+                            <AlertDialogDescription>این عملیات قابل بازگشت نیست. این کار محصول را برای همیشه حذف کرده و ممکن است روی کوپن‌های موجود تأثیر بگذارد.</AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>انصراف</AlertDialogCancel>

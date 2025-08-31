@@ -1,47 +1,49 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/components/auth-provider';
 import OptimizeForm from '@/components/optimize/optimize-form';
-import { Product, User } from '@/lib/data';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { Product, UserProfile } from '@/lib/data';
+import { createClient } from '@/lib/supabase';
 import { LoaderCircle } from 'lucide-react';
 
 export default function OptimizePage() {
-  const { user } = useAuth();
-  const [salesAgents, setSalesAgents] = useState<User[]>([]);
+  const { profile } = useAuth();
+  const supabase = createClient();
+  const [salesAgents, setSalesAgents] = useState<UserProfile[]>([]);
   const [activeProducts, setActiveProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const usersPromise = supabase.from('profiles').select('*').eq('role', 'sales');
+      const productsPromise = supabase.from('products').select('*').eq('is_active', true);
+
+      const [
+        { data: agentsList, error: usersError },
+        { data: productsList, error: productsError }
+      ] = await Promise.all([usersPromise, productsPromise]);
+
+      if (usersError) throw usersError;
+      if (productsError) throw productsError;
+
+      setSalesAgents(agentsList);
+      setActiveProducts(productsList);
+
+    } catch (error) {
+      console.error("Error fetching optimization data: ", error);
+      // Optionally show a toast message
+    }
+    setLoading(false);
+  }, [supabase]);
+  
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const usersRef = collection(db, "users");
-        const usersQuery = query(usersRef, where("role", "==", "sales"));
-        const usersSnapshot = await getDocs(usersQuery);
-        const agentsList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-        setSalesAgents(agentsList);
-
-        const productsRef = collection(db, "products");
-        const productsQuery = query(productsRef, where("is_active", "==", true));
-        const productsSnapshot = await getDocs(productsQuery);
-        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-        setActiveProducts(productsList);
-
-      } catch (error) {
-        console.error("Error fetching optimization data: ", error);
-        // Optionally show a toast message
-      }
-      setLoading(false);
-    };
-
-    if (user?.role === 'manager') {
+    if (profile?.role === 'manager') {
       fetchData();
     }
-  }, [user]);
+  }, [profile, fetchData]);
 
-  if (user?.role !== 'manager') {
+  if (profile?.role !== 'manager') {
     return (
       <div className="text-center py-10">
         <h1 className="text-2xl font-bold">دسترسی غیرمجاز</h1>

@@ -6,9 +6,9 @@ import AgentDashboard from '@/components/dashboard/agent-dashboard';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Dashboard() {
-  const { user, loading } = useAuth();
+  const { profile, loading } = useAuth();
 
-  if (loading || !user) {
+  if (loading || !profile) {
     return (
       <div>
         <Skeleton className="h-8 w-1/4 mb-4" />
@@ -29,9 +29,9 @@ export default function Dashboard() {
     <>
       <div className="mb-4">
         <h1 className="text-3xl font-bold font-headline tracking-tight">داشبورد</h1>
-        <p className="text-muted-foreground">خوش آمدید، {user.full_name}. گزارش امروز به این شرح است.</p>
+        <p className="text-muted-foreground">خوش آمدید، {profile.full_name}. گزارش امروز به این شرح است.</p>
       </div>
-      {user.role === 'manager' ? <ManagerDashboard /> : <AgentDashboard user={user}/>}
+      {profile.role === 'manager' ? <ManagerDashboard /> : <AgentDashboard userProfile={profile}/>}
     </>
   );
 }

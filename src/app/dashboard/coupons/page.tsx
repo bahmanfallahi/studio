@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { PlusCircle, Filter, LoaderCircle, MoreHorizontal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -41,78 +41,77 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/components/auth-provider';
-import { User, Coupon, Product } from '@/lib/data';
+import { UserProfile, Coupon, Product } from '@/lib/data';
 import CreateCouponForm from '@/components/coupons/create-coupon-form';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, addDoc, query, where, doc, getDoc, updateDoc, deleteDoc, DocumentData, Query } from 'firebase/firestore';
+import { createClient } from '@/lib/supabase';
 
 export default function CouponsPage() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const searchParams = useSearchParams();
   const router = useRouter();
   const { toast } = useToast();
+  const supabase = createClient();
 
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [coupons, setCoupons] = useState<Coupon[]>([]);
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserProfile[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [agentFilter, setAgentFilter] = useState<string[]>([]);
   
-  useEffect(() => {
-    if (!user) return;
-    
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch all products
-        const productsCollection = collection(db, "products");
-        const productsSnapshot = await getDocs(productsCollection);
-        const productsList = productsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-        setProducts(productsList);
+  const fetchData = useCallback(async () => {
+    if (!profile) return;
+    setLoading(true);
+    try {
+      const productsPromise = supabase.from('products').select('*');
+      const usersPromise = profile.role === 'manager' ? supabase.from('profiles').select('*') : Promise.resolve({ data: [profile], error: null });
 
-        // Fetch users (only managers can see all users)
-        if (user.role === 'manager') {
-          const usersCollection = collection(db, "users");
-          const usersSnapshot = await getDocs(usersCollection);
-          const usersList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-          setUsers(usersList);
-        } else {
-          setUsers([user]); // Agent only sees themselves
-        }
+      let couponsQuery = supabase
+        .from('coupons')
+        .select('*, products(name), profiles(full_name)')
+        .order('created_at', { ascending: false });
 
-        // Fetch coupons
-        let couponsQuery: Query<DocumentData> = collection(db, "coupons");
-        if (user.role !== 'manager') {
-            couponsQuery = query(couponsQuery, where("user_id", "==", user.id));
-        }
-        const couponsSnapshot = await getDocs(couponsQuery);
-        const couponsList = couponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
-        setCoupons(couponsList);
-
-      } catch (error) {
-        console.error("Error fetching data: ", error);
-        toast({
-          variant: 'destructive',
-          title: 'خطا در دریافت اطلاعات',
-          description: 'امکان بارگذاری اطلاعات از پایگاه داده وجود نداشت.',
-        });
+      if (profile.role !== 'manager') {
+        couponsQuery = couponsQuery.eq('user_id', profile.id);
       }
-      setLoading(false);
-    };
+      
+      const [
+        { data: productsList, error: productsError },
+        { data: usersList, error: usersError },
+        { data: couponsList, error: couponsError }
+      ] = await Promise.all([productsPromise, usersPromise, couponsQuery]);
 
+      if (productsError) throw productsError;
+      if (usersError) throw usersError;
+      if (couponsError) throw couponsError;
+
+      setProducts(productsList as Product[]);
+      setUsers(usersList as UserProfile[]);
+      setCoupons(couponsList as Coupon[]);
+
+    } catch (error: any) {
+      console.error("Error fetching data: ", error);
+      toast({
+        variant: 'destructive',
+        title: 'خطا در دریافت اطلاعات',
+        description: error.message || 'امکان بارگذاری اطلاعات از پایگاه داده وجود نداشت.',
+      });
+    }
+    setLoading(false);
+  }, [profile, supabase, toast]);
+
+  useEffect(() => {
     fetchData();
-  }, [user, toast]);
+  }, [fetchData]);
 
 
   useEffect(() => {
     if (searchParams.get('create') === 'true') {
       setCreateOpen(true);
-      // Clean up URL
       router.replace('/dashboard/coupons', { scroll: false });
     }
   }, [searchParams, router]);
@@ -127,66 +126,61 @@ export default function CouponsPage() {
   };
 
   const filteredCoupons = useMemo(() => {
-    let result = coupons; // Already pre-filtered by role in useEffect
-
-    if (statusFilter.length > 0) {
-      result = result.filter(c => statusFilter.includes(c.status));
-    }
-    if (agentFilter.length > 0 && user?.role === 'manager') {
-      result = result.filter(c => agentFilter.includes(c.user_id));
-    }
+    let result = coupons;
+    if (statusFilter.length > 0) result = result.filter(c => statusFilter.includes(c.status));
+    if (agentFilter.length > 0 && profile?.role === 'manager') result = result.filter(c => agentFilter.includes(c.user_id));
     return result;
-  }, [coupons, user, statusFilter, agentFilter]);
+  }, [coupons, profile, statusFilter, agentFilter]);
 
   const addCoupon = async (newCouponData: Omit<Coupon, 'id' | 'created_at' | 'code'>) => {
       const productName = products.find(p=>p.id === newCouponData.product_id)?.name?.split(' ').join('').toUpperCase() || 'COUPON';
-      const newCoupon: Omit<Coupon, 'id'> = {
-        ...newCouponData,
-        code: `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`,
-        created_at: new Date().toISOString(),
-      };
+      const code = `${productName}-OFF${newCouponData.discount_percent}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      const { error } = await supabase
+        .from('coupons')
+        .insert({ ...newCouponData, code });
       
-      try {
-        const docRef = await addDoc(collection(db, "coupons"), newCoupon);
-        setCoupons(prev => [{...newCoupon, id: docRef.id }, ...prev]);
-        return true;
-      } catch (error) {
+      if (error) {
         console.error("Error adding coupon: ", error);
         return false;
       }
+      fetchData(); // Refetch all data to get the new coupon
+      return true;
   };
   
   const handleUpdateStatus = async (couponId: string, status: 'expired' | 'used') => {
-    try {
-      const couponRef = doc(db, "coupons", couponId);
-      await updateDoc(couponRef, { status });
-      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status } : c));
-      toast({ title: `کوپن ${status === 'used' ? 'استفاده شده' : 'منقضی'} شد`, description: `کوپن به عنوان ${status === 'used' ? 'استفاده شده' : 'منقضی'} علامت‌گذاری شد.` });
-    } catch (error) {
+    const { error } = await supabase
+      .from('coupons')
+      .update({ status })
+      .eq('id', couponId);
+
+    if (error) {
       console.error(`Error updating coupon to ${status}:`, error);
       toast({ variant: "destructive", title: "بروزرسانی ناموفق", description: `امکان بروزرسانی کوپن وجود نداشت.` });
+    } else {
+      setCoupons(prev => prev.map(c => c.id === couponId ? { ...c, status } : c));
+      toast({ title: `کوپن ${status === 'used' ? 'استفاده شده' : 'منقضی'} شد`, description: `کوپن به عنوان ${status === 'used' ? 'استفاده شده' : 'منقضی'} علامت‌گذاری شد.` });
     }
   };
-
 
   const handleDelete = async (couponId: string) => {
-    try {
-      await deleteDoc(doc(db, "coupons", couponId));
-      setCoupons(prev => prev.filter(c => c.id !== couponId));
-      toast({ title: "کوپن حذف شد", description: "کوپن برای همیشه حذف شد." });
-    } catch (error) {
+    const { error } = await supabase
+      .from('coupons')
+      .delete()
+      .eq('id', couponId);
+
+    if (error) {
       console.error("Error deleting coupon:", error);
       toast({ variant: "destructive", title: "حذف ناموفق", description: "امکان حذف کوپن وجود نداشت." });
+    } else {
+      setCoupons(prev => prev.filter(c => c.id !== couponId));
+      toast({ title: "کوپن حذف شد", description: "کوپن برای همیشه حذف شد." });
     }
   };
 
-  if (loading || !user) return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
+  if (loading || !profile) return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
 
-  const statusTranslations: { [key: string]: string } = {
-    active: 'فعال',
-    used: 'استفاده شده',
-    expired: 'منقضی شده'
-  };
+  const statusTranslations: { [key: string]: string } = { active: 'فعال', used: 'استفاده شده', expired: 'منقضی شده' };
 
   return (
     <>
@@ -194,9 +188,7 @@ export default function CouponsPage() {
         <div>
           <h1 className="text-3xl font-bold font-headline tracking-tight">کوپن‌ها</h1>
           <p className="text-muted-foreground">
-            {user.role === 'manager'
-              ? 'تمام کوپن‌ها را مدیریت و رهگیری کنید.'
-              : 'کوپن‌های ساخته شده خود را مشاهده و مدیریت کنید.'}
+            {profile.role === 'manager' ? 'تمام کوپن‌ها را مدیریت و رهگیری کنید.' : 'کوپن‌های ساخته شده خود را مشاهده و مدیریت کنید.'}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -208,7 +200,7 @@ export default function CouponsPage() {
         isOpen={isCreateOpen}
         setIsOpen={setCreateOpen}
         products={products.filter(p => p.is_active)}
-        user={user}
+        userProfile={profile}
         onCouponCreate={addCoupon}
       />
 
@@ -217,17 +209,13 @@ export default function CouponsPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>لیست کوپن‌ها</CardTitle>
-              <CardDescription>
-                لیستی از تمام کوپن‌های موجود در سیستم.
-              </CardDescription>
+              <CardDescription>لیستی از تمام کوپن‌های موجود در سیستم.</CardDescription>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1">
-                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-                    فیلتر
-                  </span>
                   <Filter className="h-3.5 w-3.5" />
+                  <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">فیلتر</span>
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -238,14 +226,12 @@ export default function CouponsPage() {
                   <DropdownMenuCheckboxItem
                     key={status}
                     checked={statusFilter.includes(status)}
-                    onCheckedChange={(checked) => {
-                      setStatusFilter(prev => checked ? [...prev, status] : prev.filter(s => s !== status))
-                    }}
+                    onCheckedChange={(checked) => setStatusFilter(prev => checked ? [...prev, status] : prev.filter(s => s !== status))}
                   >
                     {statusTranslations[status]}
                   </DropdownMenuCheckboxItem>
                 ))}
-                {user.role === 'manager' && (
+                {profile.role === 'manager' && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuLabel>نماینده فروش</DropdownMenuLabel>
@@ -253,9 +239,7 @@ export default function CouponsPage() {
                        <DropdownMenuCheckboxItem
                          key={agent.id}
                          checked={agentFilter.includes(agent.id)}
-                         onCheckedChange={(checked) => {
-                           setAgentFilter(prev => checked ? [...prev, agent.id] : prev.filter(id => id !== agent.id))
-                         }}
+                         onCheckedChange={(checked) => setAgentFilter(prev => checked ? [...prev, agent.id] : prev.filter(id => id !== agent.id))}
                        >
                          {agent.full_name}
                        </DropdownMenuCheckboxItem>
@@ -271,7 +255,7 @@ export default function CouponsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead className="text-right">کد</TableHead>
-                {user.role === 'manager' && <TableHead className="text-right">نماینده</TableHead>}
+                {profile.role === 'manager' && <TableHead className="text-right">نماینده</TableHead>}
                 <TableHead className="text-right">محصول</TableHead>
                 <TableHead className="text-right">تخفیف</TableHead>
                 <TableHead className="text-right">وضعیت</TableHead>
@@ -281,72 +265,40 @@ export default function CouponsPage() {
             </TableHeader>
             <TableBody>
               {filteredCoupons.length > 0 ? (
-                filteredCoupons.map((coupon) => {
-                  const product = products.find((p) => p.id === coupon.product_id);
-                  const couponUser = users.find((u) => u.id === coupon.user_id);
-                  return (
+                filteredCoupons.map((coupon) => (
                     <TableRow key={coupon.id}>
                       <TableCell className="font-medium text-right">{coupon.code}</TableCell>
-                       {user.role === 'manager' && <TableCell className="text-right">{couponUser?.full_name || 'N/A'}</TableCell>}
-                      <TableCell className="text-right">{product?.name || 'N/A'}</TableCell>
+                       {profile.role === 'manager' && <TableCell className="text-right">{coupon.profiles?.full_name || 'N/A'}</TableCell>}
+                      <TableCell className="text-right">{coupon.products?.name || 'N/A'}</TableCell>
                       <TableCell className="text-right">{coupon.discount_percent}%</TableCell>
                       <TableCell className="text-right">
-                        <Badge
-                          variant={coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'}
-                          className={
-                            coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' :
-                            coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
-                            'bg-red-500/20 text-red-700 border-red-500/30'
-                          }
-                        >
+                        <Badge variant={coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'}
+                          className={ coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30' }>
                           {statusTranslations[coupon.status]}
                         </Badge>
                       </TableCell>
                        <TableCell className="text-right">
-                          {coupon.status === 'active' ? (
-                            <Countdown expiryDate={coupon.expires_at} />
-                          ) : (
-                            new Date(coupon.expires_at).toLocaleDateString('fa-IR')
-                          )}
+                          {coupon.status === 'active' ? <Countdown expiryDate={coupon.expires_at} /> : new Date(coupon.expires_at).toLocaleDateString('fa-IR')}
                         </TableCell>
                       <TableCell className="text-center">
                         <AlertDialog>
                            <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon">
-                                <span className="sr-only">باز کردن منو</span>
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
+                              <Button variant="ghost" size="icon"><span className="sr-only">باز کردن منو</span><MoreHorizontal className="h-4 w-4" /></Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>عملیات</DropdownMenuLabel>
-                              <DropdownMenuItem onClick={() => handleCopy(coupon.code)}>
-                                کپی لینک
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleUpdateStatus(coupon.id, 'used')}
-                                disabled={coupon.status !== 'active'}
-                              >
-                                علامت‌گذاری به عنوان استفاده شده
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => handleUpdateStatus(coupon.id, 'expired')}
-                                disabled={coupon.status !== 'active'}
-                              >
-                                غیرفعال کردن
-                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleCopy(coupon.code)}>کپی لینک</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(coupon.id, 'used')} disabled={coupon.status !== 'active'}>علامت‌گذاری به عنوان استفاده شده</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(coupon.id, 'expired')} disabled={coupon.status !== 'active'}>غیرفعال کردن</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                               <AlertDialogTrigger asChild>
-                                <DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem>
-                              </AlertDialogTrigger>
+                               <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem></AlertDialogTrigger>
                             </DropdownMenuContent>
                           </DropdownMenu>
                           <AlertDialogContent>
                             <AlertDialogHeader>
                               <AlertDialogTitle>آیا کاملاً مطمئن هستید؟</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                این عملیات قابل بازگشت نیست. این کار کوپن را برای همیشه از پایگاه داده حذف می‌کند.
-                              </AlertDialogDescription>
+                              <AlertDialogDescription>این عملیات قابل بازگشت نیست. این کار کوپن را برای همیشه از پایگاه داده حذف می‌کند.</AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>انصراف</AlertDialogCancel>
@@ -356,13 +308,10 @@ export default function CouponsPage() {
                         </AlertDialog>
                       </TableCell>
                     </TableRow>
-                  );
-                })
+                ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={user.role === 'manager' ? 7 : 6} className="h-24 text-center">
-                    کوپنی یافت نشد.
-                  </TableCell>
+                  <TableCell colSpan={profile.role === 'manager' ? 7 : 6} className="h-24 text-center">کوپنی یافت نشد.</TableCell>
                 </TableRow>
               )}
             </TableBody>

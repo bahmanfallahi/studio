@@ -1,71 +1,65 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PlusCircle, Ticket, Clock, CheckCircle, Copy, LoaderCircle, AlertTriangle } from 'lucide-react';
-import { User, Coupon } from '@/lib/data';
+import { UserProfile, Coupon } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import Countdown from '@/components/coupon/countdown';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { createClient } from '@/lib/supabase';
 
-export default function AgentDashboard({ user }: { user: User }) {
+export default function AgentDashboard({ userProfile }: { userProfile: UserProfile }) {
   const { toast } = useToast();
+  const supabase = createClient();
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [stats, setStats] = useState({ total: 0, active: 0, used: 0 });
 
+  const fetchDashboardData = useCallback(async () => {
+    if (!userProfile) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch all coupons for stats
+      const { data: allCouponsList, error: allCouponsError } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('user_id', userProfile.id);
+
+      if (allCouponsError) throw allCouponsError;
+
+      setStats({
+        total: allCouponsList.length,
+        active: allCouponsList.filter(c => c.status === 'active').length,
+        used: allCouponsList.filter(c => c.status === 'used').length
+      });
+
+      // Fetch last 5 recent coupons for table
+      const { data: recentCouponsList, error: recentCouponsError } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('user_id', userProfile.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (recentCouponsError) throw recentCouponsError;
+
+      setCoupons(recentCouponsList);
+
+    } catch (err: any) {
+      console.error("Failed to fetch coupons: ", err);
+      setError(err.message || 'امکان دریافت کوپن‌های اخیر وجود نداشت. لطفاً بعداً دوباره تلاش کنید.');
+    }
+    setLoading(false);
+  }, [userProfile, supabase]);
+  
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      if (!user) return;
-      setLoading(true);
-      setError(null);
-      try {
-        const allCouponsRef = collection(db, "coupons");
-        const allCouponsQuery = query(allCouponsRef, where("user_id", "==", user.id));
-        const allCouponsSnapshot = await getDocs(allCouponsQuery);
-        
-        if (allCouponsSnapshot.empty && (allCouponsSnapshot.metadata.fromCache)) {
-             setError("امکان بارگذاری داده‌های داشبورد وجود ندارد. لطفاً اتصال اینترنت خود را بررسی کرده و دوباره تلاش کنید.");
-             setLoading(false);
-             return;
-        }
-
-        const allCouponsList = allCouponsSnapshot.docs.map(doc => doc.data() as Coupon);
-
-        setStats({
-          total: allCouponsList.length,
-          active: allCouponsList.filter(c => c.status === 'active').length,
-          used: allCouponsList.filter(c => c.status === 'used').length
-        });
-
-        // Fetch last 5 recent coupons for table
-        const recentCouponsQuery = query(
-          allCouponsRef, 
-          where("user_id", "==", user.id), 
-          orderBy("created_at", "desc"),
-          limit(5)
-        );
-        const recentCouponsSnapshot = await getDocs(recentCouponsQuery);
-        const recentCouponsList = recentCouponsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Coupon));
-        setCoupons(recentCouponsList);
-
-      } catch (err) {
-        console.error("Failed to fetch coupons: ", err);
-        if ((err as any).code === 'failed-precondition') {
-             setError('یک ایندکس پایگاه داده مورد نیاز است. لطفاً از مدیر سیستم بخواهید ایندکس لازم را در Firestore ایجاد کند.');
-        } else {
-            setError('امکان دریافت کوپن‌های اخیر وجود نداشت. لطفاً بعداً دوباره تلاش کنید.');
-        }
-      }
-      setLoading(false);
-    };
     fetchDashboardData();
-  }, [user, toast]);
+  }, [fetchDashboardData]);
 
   const handleCopy = (code: string) => {
     const url = `${window.location.origin}/coupon/${code}`;
@@ -172,20 +166,13 @@ export default function AgentDashboard({ user }: { user: User }) {
                   <TableCell className="font-medium text-right">{coupon.code}</TableCell>
                   <TableCell className="text-right">{coupon.discount_percent}%</TableCell>
                   <TableCell className="text-right">
-                    <Badge variant={
-                      coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive'
-                    } className={
-                       coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : 
-                       coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' :
-                       'bg-red-500/20 text-red-700 border-red-500/30'
-                    }>{statusTranslations[coupon.status]}</Badge>
+                    <Badge variant={ coupon.status === 'active' ? 'default' : coupon.status === 'used' ? 'secondary' : 'destructive' } 
+                          className={ coupon.status === 'active' ? 'bg-green-500/20 text-green-700 border-green-500/30' : coupon.status === 'used' ? 'bg-blue-500/20 text-blue-700 border-blue-500/30' : 'bg-red-500/20 text-red-700 border-red-500/30' }>
+                      {statusTranslations[coupon.status]}
+                    </Badge>
                   </TableCell>
                    <TableCell className="text-right">
-                      {coupon.status === 'active' ? (
-                        <Countdown expiryDate={coupon.expires_at} />
-                      ) : (
-                        '--'
-                      )}
+                      {coupon.status === 'active' ? <Countdown expiryDate={coupon.expires_at} /> : '--'}
                     </TableCell>
                   <TableCell className="text-center">
                     <Button variant="ghost" size="icon" onClick={() => handleCopy(coupon.code)}>

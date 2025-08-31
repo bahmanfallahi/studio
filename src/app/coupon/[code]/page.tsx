@@ -1,36 +1,34 @@
 import { notFound } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
 import { Coupon, Product } from '@/lib/data';
-import PublicCouponDisplay from '@/components/coupon/public-display';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Ticket } from 'lucide-react';
 import PublicCouponPageClient from './client-page';
+import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
 async function getCouponData(code: string) {
-    const couponsRef = collection(db, "coupons");
-    const q = query(couponsRef, where("code", "==", code));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-        return null;
-    }
-
-    const couponDoc = querySnapshot.docs[0];
-    const coupon = { id: couponDoc.id, ...couponDoc.data() } as Coupon;
-
-    const productRef = doc(db, "products", coupon.product_id);
-    const productSnap = await getDoc(productRef);
-
-    if (!productSnap.exists()) {
-        return null;
-    }
-
-    const product = { id: productSnap.id, ...productSnap.data() } as Product;
+    // Use admin client for server-side fetching to bypass RLS if necessary,
+    // or use anon key if public access is intended and RLS is set up.
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
     
-    return { coupon, product };
+    const { data: coupon, error } = await supabase
+        .from('coupons')
+        .select('*, products(*)')
+        .eq('code', code)
+        .single();
+        
+    if (error || !coupon) {
+        console.error('Error fetching coupon:', error?.message);
+        return null;
+    }
+
+    const productData = coupon.products;
+    // The product data is already joined, so we just need to type it.
+    // The coupon object contains the rest of the coupon data.
+    
+    return { coupon: coupon as Coupon, product: productData as Product };
 }
 
 

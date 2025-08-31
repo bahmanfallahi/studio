@@ -1,75 +1,101 @@
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { User } from '@/lib/data';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-
+import { User } from '@supabase/supabase-js';
+import { createClient } from '@/lib/supabase';
+import { UserProfile } from '@/lib/data';
 
 interface AuthContextType {
   user: User | null;
-  login: (username: string, password_hash: string) => Promise<void>;
+  profile: UserProfile | null;
+  login: (email: string, password_hash: string) => Promise<any>;
   logout: () => void;
-  isAuthenticated: boolean;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const supabase = createClient();
   const [user, setUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try to load user from localStorage on initial load
-    try {
-      const storedUser = localStorage.getItem('coupon_crafter_user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
+    const getSession = async () => {
+      setLoading(true);
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session?.user) {
+        const currentUser = session.user;
+        setUser(currentUser);
+        
+        const { data: userProfile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', currentUser.id)
+          .single();
+
+        if (userProfile && !error) {
+          setProfile(userProfile);
+        } else {
+          console.error("Error fetching profile:", error?.message);
+          setProfile(null);
+        }
       }
-    } catch (error) {
-      console.error("Failed to parse user from localStorage", error)
-      localStorage.removeItem('coupon_crafter_user');
-    } finally {
       setLoading(false);
-    }
+    };
+
+    getSession();
+
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+
+        if (currentUser) {
+            const { data: userProfile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', currentUser.id)
+              .single();
+            setProfile(userProfile ?? null);
+            if (error) console.error("Error fetching profile on auth change:", error.message);
+        } else {
+            setProfile(null);
+        }
+        setLoading(false);
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
-  const login = async (username: string, password_hash: string) => {
+  const login = async (email: string, password_hash: string) => {
     setLoading(true);
-    const usersRef = collection(db, 'users');
-    const q = query(usersRef, where('username', '==', username), where('password_hash', '==', password_hash));
-    
-    try {
-        const querySnapshot = await getDocs(q);
-        if (querySnapshot.empty) {
-            throw new Error('Invalid username or password');
-        }
-
-        const foundUser = { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() } as User;
-        setUser(foundUser);
-        localStorage.setItem('coupon_crafter_user', JSON.stringify(foundUser));
-
-    } catch (error) {
-        console.error("Login failed:", error);
-        throw error; // Re-throw the error to be caught by the login form
-    } finally {
-        setLoading(false);
-    }
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password: password_hash,
+    });
+    setLoading(false);
+    if (error) throw error;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('coupon_crafter_user');
+    setProfile(null);
   };
 
-  const isAuthenticated = !!user;
+  const value = {
+    user,
+    profile,
+    login,
+    logout,
+    loading,
+  };
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export const useAuth = () => {

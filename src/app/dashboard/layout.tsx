@@ -27,7 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
-import { User } from '@/lib/data';
+import { UserProfile } from '@/lib/data';
 
 function NavLink({ href, icon: Icon, children }: { href: string; icon: React.ElementType; children: React.ReactNode }) {
   const pathname = usePathname();
@@ -46,11 +46,11 @@ function NavLink({ href, icon: Icon, children }: { href: string; icon: React.Ele
   );
 }
 
-function UserMenu({ user, logout }: { user: User; logout: () => void }) {
+function UserMenu({ profile, logout }: { profile: UserProfile; logout: () => void }) {
   const router = useRouter();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push('/');
   };
 
@@ -61,8 +61,8 @@ function UserMenu({ user, logout }: { user: User; logout: () => void }) {
             <div className="flex items-center gap-2">
                  <div className="p-2 bg-muted rounded-full"><UserIcon className="h-5 w-5" /></div>
                  <div className="flex flex-col">
-                    <span className="font-semibold text-sm">{user.full_name}</span>
-                    <span className="text-xs text-muted-foreground capitalize">{user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}</span>
+                    <span className="font-semibold text-sm">{profile.full_name}</span>
+                    <span className="text-xs text-muted-foreground capitalize">{profile.role === 'manager' ? 'مدیر' : 'نماینده فروش'}</span>
                  </div>
             </div>
           <ChevronDown className="mr-auto h-4 w-4 shrink-0 opacity-50" />
@@ -71,8 +71,7 @@ function UserMenu({ user, logout }: { user: User; logout: () => void }) {
       <DropdownMenuContent className="w-56" align="end" forceMount>
         <DropdownMenuLabel className="font-normal">
           <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.full_name}</p>
-            <p className="text-xs leading-none text-muted-foreground">{user.username}</p>
+            <p className="text-sm font-medium leading-none">{profile.full_name}</p>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -85,12 +84,12 @@ function UserMenu({ user, logout }: { user: User; logout: () => void }) {
   );
 }
 
-function SidebarNav({ user }: { user: User }) {
+function SidebarNav({ profile }: { profile: UserProfile }) {
   return (
     <nav className="grid items-start gap-1 text-sm font-medium">
       <NavLink href="/dashboard" icon={LayoutDashboard}>داشبورد</NavLink>
       <NavLink href="/dashboard/coupons" icon={Ticket}>کوپن‌ها</NavLink>
-      {user.role === 'manager' && (
+      {profile.role === 'manager' && (
         <>
           <NavLink href="/dashboard/products" icon={Package}>محصولات</NavLink>
           <NavLink href="/dashboard/users" icon={Users}>کاربران</NavLink>
@@ -108,7 +107,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, logout } = useAuth();
+  const { user, profile, loading, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -117,7 +116,7 @@ export default function DashboardLayout({
     }
   }, [user, loading, router]);
 
-  if (loading || !user) {
+  if (loading || !user || !profile) {
     return (
       <div className="flex h-screen items-center justify-center">
         <div className="text-center">
@@ -145,11 +144,11 @@ export default function DashboardLayout({
           </div>
           <div className="flex-1">
             <div className="grid items-start p-4">
-              <SidebarNav user={user} />
+              <SidebarNav profile={profile} />
             </div>
           </div>
           <div className="mt-auto p-4 border-t">
-            <UserMenu user={user} logout={logout} />
+            <UserMenu profile={profile} logout={logout} />
           </div>
         </div>
     </>

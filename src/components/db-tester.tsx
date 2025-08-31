@@ -13,23 +13,25 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { db } from '@/lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { createClient } from '@/lib/supabase';
 import { Database, LoaderCircle } from 'lucide-react';
 
 export default function DbTester() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccessModalOpen, setSuccessModalOpen] = useState(false);
   const { toast } = useToast();
+  const supabase = createClient();
 
   const handleTestConnection = async () => {
     setIsLoading(true);
     try {
       // We perform a simple, non-existent document read.
-      // Firestore does not charge for reading a non-existent document.
-      // This is a safe way to check if rules allow reads and connection is okay.
-      const testDocRef = doc(db, 'test_collection', 'test_doc');
-      await getDoc(testDocRef);
+      // Supabase doesn't charge for this kind of lightweight query.
+      // This is a safe way to check if connection and RLS are okay.
+      const { error } = await supabase.from('products').select('id').limit(1);
+
+      if (error) throw error;
+
       setSuccessModalOpen(true);
     } catch (error: any) {
       console.error("Database connection test failed:", error);
@@ -52,7 +54,7 @@ export default function DbTester() {
             تست‌کننده اتصال پایگاه داده
           </CardTitle>
           <CardDescription>
-            برای تأیید اتصال به پایگاه داده Firebase Firestore، روی دکمه کلیک کنید.
+            برای تأیید اتصال به پایگاه داده Supabase، روی دکمه کلیک کنید.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -74,7 +76,7 @@ export default function DbTester() {
           <AlertDialogHeader>
             <AlertDialogTitle>اتصال موفقیت‌آمیز بود!</AlertDialogTitle>
             <AlertDialogDescription>
-              برنامه با موفقیت به پایگاه داده Firebase Firestore متصل شد.
+              برنامه با موفقیت به پایگاه داده Supabase متصل شد.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

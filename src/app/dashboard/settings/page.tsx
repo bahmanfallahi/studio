@@ -1,51 +1,50 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/auth-provider';
-import { User } from '@/lib/data';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, doc, writeBatch } from 'firebase/firestore';
+import { UserProfile } from '@/lib/data';
 import { LoaderCircle, Save } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import { createClient } from '@/lib/supabase';
 
 export default function SettingsPage() {
-  const { user: currentUser } = useAuth();
+  const { profile: currentUser } = useAuth();
   const { toast } = useToast();
-  const [salesAgents, setSalesAgents] = useState<User[]>([]);
+  const supabase = createClient();
+  const [salesAgents, setSalesAgents] = useState<UserProfile[]>([]);
   const [limits, setLimits] = useState<{ [key: string]: number }>({});
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
+  const fetchAgents = useCallback(async () => {
+    if (currentUser?.role !== 'manager') return;
+    setLoading(true);
+    const { data: agents, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('role', 'sales');
+
+    if (error) {
+      console.error("Error fetching sales agents:", error);
+      toast({ variant: 'destructive', title: 'خطا', description: error.message });
+    } else {
+      setSalesAgents(agents);
+      const initialLimits = agents.reduce((acc, agent) => {
+        acc[agent.id] = agent.coupon_limit_per_month || 10;
+        return acc;
+      }, {} as { [key: string]: number });
+      setLimits(initialLimits);
+    }
+    setLoading(false);
+  }, [currentUser, supabase, toast]);
+
   useEffect(() => {
-    const fetchAgents = async () => {
-      if (currentUser?.role !== 'manager') return;
-      setLoading(true);
-      try {
-        const usersRef = collection(db, "users");
-        const q = query(usersRef, where("role", "==", "sales"));
-        const querySnapshot = await getDocs(q);
-        const agents = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-        setSalesAgents(agents);
-
-        const initialLimits = agents.reduce((acc, agent) => {
-          acc[agent.id] = agent.coupon_limit_per_month || 10;
-          return acc;
-        }, {} as { [key: string]: number });
-        setLimits(initialLimits);
-
-      } catch (error) {
-        console.error("Error fetching sales agents:", error);
-        toast({ variant: 'destructive', title: 'خطا', description: 'امکان دریافت لیست نمایندگان فروش وجود نداشت.' });
-      }
-      setLoading(false);
-    };
-
     fetchAgents();
-  }, [currentUser, toast]);
+  }, [fetchAgents]);
 
   const handleLimitChange = (agentId: string, value: string) => {
     const numberValue = parseInt(value, 10);
@@ -57,24 +56,22 @@ export default function SettingsPage() {
 
   const handleSaveChanges = async () => {
     setIsSaving(true);
-    try {
-      const batch = writeBatch(db);
-      Object.keys(limits).forEach(agentId => {
-        const agentRef = doc(db, "users", agentId);
-        batch.update(agentRef, { coupon_limit_per_month: limits[agentId] });
-      });
-      await batch.commit();
+    
+    const updates = Object.keys(limits).map(agentId => 
+      supabase
+        .from('profiles')
+        .update({ coupon_limit_per_month: limits[agentId] })
+        .eq('id', agentId)
+    );
 
-      // Update local state to match saved data
-      setSalesAgents(prev => prev.map(agent => ({
-        ...agent,
-        coupon_limit_per_month: limits[agent.id],
-      })));
+    const results = await Promise.all(updates);
+    const hasError = results.some(res => res.error);
 
-      toast({ title: 'موفقیت', description: 'سقف کوپن‌ها با موفقیت به‌روز شد.' });
-    } catch (error) {
-      console.error("Error saving limits:", error);
-      toast({ variant: 'destructive', title: 'ذخیره ناموفق', description: 'امکان به‌روزرسانی سقف‌ها وجود نداشت.' });
+    if (hasError) {
+        toast({ variant: 'destructive', title: 'ذخیره ناموفق', description: 'امکان به‌روزرسانی سقف‌ها وجود نداشت.' });
+    } else {
+        toast({ title: 'موفقیت', description: 'سقف کوپن‌ها با موفقیت به‌روز شد.' });
+        fetchAgents(); // Refresh data from server
     }
     setIsSaving(false);
   };
@@ -89,11 +86,7 @@ export default function SettingsPage() {
   }
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <LoaderCircle className="h-10 w-10 animate-spin" />
-      </div>
-    );
+    return <div className="flex items-center justify-center h-full"><LoaderCircle className="h-10 w-10 animate-spin" /></div>;
   }
 
   return (
