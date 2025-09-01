@@ -50,11 +50,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { createClient } from '@/lib/supabase';
-import { type User } from '@supabase/supabase-js';
+import { fetchUsers, saveUser, deleteUserAction, UserWithAuth } from './actions';
 
-// This type joins the profile with the auth user data
-type UserWithAuth = UserProfile & { auth_user?: { email?: string, created_at?: string } };
 
 function UserForm({
   user: initialUser,
@@ -62,20 +59,21 @@ function UserForm({
   onClose,
 }: {
   user: Partial<UserWithAuth> | null;
-  onSave: (user: Partial<UserWithAuth>) => Promise<boolean>;
+  onSave: (user: Partial<UserWithAuth>, password?: string) => Promise<boolean>;
   onClose: () => void;
 }) {
   const [formData, setFormData] = useState<Partial<UserWithAuth>>(
-    initialUser || { full_name: '', auth_user: { email: ''}, role: 'sales', coupon_limit_per_month: 10 }
+    initialUser || { full_name: '', email: '', role: 'sales', coupon_limit_per_month: 10 }
   );
+  const [password, setPassword] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value, type } = e.target;
     
-    if (name === 'email') {
-        setFormData(prev => ({...prev, auth_user: {...prev.auth_user, email: value}}));
+    if (name === 'password') {
+        setPassword(value);
     } else {
         setFormData((prev) => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
     }
@@ -88,7 +86,7 @@ function UserForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    const success = await onSave(formData);
+    const success = await onSave(formData, password);
     setIsSaving(false);
     if(success) onClose();
   };
@@ -111,7 +109,7 @@ function UserForm({
           </div>
           <div>
             <Label htmlFor="email">ایمیل</Label>
-            <Input id="email" name="email" type="email" value={formData.auth_user?.email || ''} onChange={handleChange} required disabled={!!initialUser.id} />
+            <Input id="email" name="email" type="email" value={formData.email || ''} onChange={handleChange} required disabled={!!initialUser.id} />
           </div>
            <div>
             <Label htmlFor="password">رمز عبور</Label>
@@ -147,44 +145,40 @@ function UserForm({
 export default function UsersPage() {
   const { profile: currentUserProfile } = useAuth();
   const { toast } = useToast();
-  const supabase = createClient();
   const [users, setUsers] = useState<UserWithAuth[]>([]);
   const [editingUser, setEditingUser] = useState<Partial<UserWithAuth> | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchUsers = useCallback(async () => {
+  const loadUsers = useCallback(async () => {
     setLoading(true);
-    // To get auth data like email, we need to make an admin call.
-    // Since we can't do that securely on the client, we show a placeholder.
-    // A better solution would be a server action or edge function.
-    const { data: profiles, error } = await supabase.from('users').select('*');
-
-    if (error) {
-        toast({ variant: 'destructive', title: 'خطا در دریافت کاربران', description: error.message });
-        console.error("Error fetching users: ", error);
+    const result = await fetchUsers();
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'خطا در دریافت کاربران', description: result.error });
         setUsers([]);
     } else {
-        const usersWithAuthData = profiles.map(profile => ({
-            ...profile,
-            auth_user: { email: 'ایمیل در دسترس نیست', created_at: 'تاریخ در دسترس نیست'} // Placeholder
-        }));
-        setUsers(usersWithAuthData as any[]);
+        setUsers(result.data || []);
     }
     setLoading(false);
-  }, [supabase, toast]);
+  }, [toast]);
 
   useEffect(() => {
     if (currentUserProfile?.role === 'manager') {
-      fetchUsers();
+      loadUsers();
     }
-  }, [fetchUsers, currentUserProfile]);
+  }, [loadUsers, currentUserProfile]);
   
-  const handleSave = async (userData: Partial<UserWithAuth>) => {
-    // Creating/updating users requires admin privileges. 
-    // This should be moved to a server action / API route with admin client.
-    // The client-side implementation is for demonstration purposes.
-    toast({ variant: 'destructive', title: "عملیات غیرمجاز", description: "ایجاد یا ویرایش مستقیم کاربران از کلاینت امکان‌پذیر نیست و نیازمند یک سرور اکشن امن است." });
-    return false;
+  const handleSave = async (userData: Partial<UserWithAuth>, password?: string) => {
+    const isUpdating = !!userData.id;
+    const result = await saveUser(userData, password);
+
+    if (result.error) {
+        toast({ variant: 'destructive', title: 'ذخیره ناموفق', description: result.error });
+        return false;
+    }
+    
+    toast({ title: 'موفقیت', description: `کاربر با موفقیت ${isUpdating ? 'به‌روز' : 'ایجاد'} شد.` });
+    await loadUsers();
+    return true;
   };
 
   const handleDelete = async (userId: string) => {
@@ -192,8 +186,13 @@ export default function UsersPage() {
         toast({ variant: 'destructive', title: 'عملیات غیرمجاز', description: "شما نمی‌توانید حساب کاربری خود را حذف کنید." });
         return;
     }
-    // Deleting users requires admin privileges.
-    toast({ variant: 'destructive', title: "عملیات غیرمجاز", description: "حذف مستقیم کاربران از کلاینت امکان‌پذیر نیست و نیازمند یک سرور اکشن امن است." });
+    const result = await deleteUserAction(userId);
+    if(result.error) {
+       toast({ variant: 'destructive', title: "حذف ناموفق", description: result.error });
+    } else {
+       toast({ title: "کاربر حذف شد" });
+       await loadUsers();
+    }
   };
 
   if (currentUserProfile?.role !== 'manager') {
@@ -217,9 +216,9 @@ export default function UsersPage() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-3xl font-bold font-headline tracking-tight">کاربران</h1>
-          <p className="text-muted-foreground">تیم نمایندگان فروش و مدیران خود را مدیریت کنید. (عملیات نوشتن غیرفعال است)</p>
+          <p className="text-muted-foreground">تیم نمایندگان فروش و مدیران خود را مدیریت کنید.</p>
         </div>
-        <Button onClick={() => setEditingUser({ full_name: '', auth_user: { email: ''}, role: 'sales', coupon_limit_per_month: 10 })}>
+        <Button onClick={() => setEditingUser({ full_name: '', email: '', role: 'sales', coupon_limit_per_month: 10 })}>
           <PlusCircle className="ml-2 h-4 w-4" /> افزودن کاربر
         </Button>
       </div>
@@ -244,14 +243,14 @@ export default function UsersPage() {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium text-right">{user.full_name}</TableCell>
-                  <TableCell className="text-right">{user.auth_user?.email || 'N/A'}</TableCell>
+                  <TableCell className="text-right">{user.email}</TableCell>
                   <TableCell className="text-right">
                     <Badge variant={user.role === 'manager' ? 'default' : 'secondary'}>
                       {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
-                   <TableCell className="text-right">{user.auth_user?.created_at && user.auth_user.created_at !== 'تاریخ در دسترس نیست' ? new Date(user.auth_user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
+                   <TableCell className="text-right">{user.created_at ? new Date(user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
                   <TableCell className="text-center">
                     <AlertDialog>
                        <DropdownMenu>
