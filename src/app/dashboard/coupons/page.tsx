@@ -70,7 +70,7 @@ export default function CouponsPage() {
     setLoading(true);
     try {
       const productsPromise = supabase.from('products').select('*');
-      const usersPromise = profile.role === 'manager' ? supabase.from('users').select('*') : Promise.resolve({ data: [profile], error: null });
+      const usersPromise = profile.role === 'manager' ? supabase.from('users').select('*') : Promise.resolve({ data: [], error: null });
 
       let couponsQuery = supabase
         .from('coupons')
@@ -287,7 +287,7 @@ export default function CouponsPage() {
                               <DropdownMenuItem onClick={() => handleUpdateStatus(coupon.id, 'used')} disabled={coupon.status !== 'active'}>علامت‌گذاری به عنوان استفاده شده</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => handleUpdateStatus(coupon.id, 'expired')} disabled={coupon.status !== 'active'}>غیرفعال کردن</DropdownMenuItem>
                               <DropdownMenuSeparator />
-                               <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">حذف</DropdownMenuItem></AlertDialogTrigger>
+                               <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600" disabled={profile.role !== 'manager'}>حذف</DropdownMenuItem></AlertDialogTrigger>
                             </DropdownMenuContent>
                           </DropdownMenu>
                           <AlertDialogContent>

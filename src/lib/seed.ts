@@ -33,11 +33,16 @@ async function deleteExistingData(supabaseAdmin: any) {
 }
 
 async function createTables(supabaseAdmin: any) {
-    console.log("Creating tables...");
+    console.log("Creating tables and setting RLS policies...");
     
     // Create users table
     await supabaseAdmin.rpc('run_sql', {
         sql: `
+        -- Drop existing policies to prevent errors on re-run
+        DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
+        DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
+        DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
+
         CREATE TABLE IF NOT EXISTS public.users (
             id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
             full_name VARCHAR(255),
@@ -45,19 +50,21 @@ async function createTables(supabaseAdmin: any) {
             coupon_limit_per_month INT DEFAULT 10
         );
         ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-        DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
+        
         CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
-        DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
-        CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
-        DROP POLICY IF EXISTS "Managers can update user roles and limits" ON public.users;
-        CREATE POLICY "Managers can update user roles and limits" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+        CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
         `
     });
-    console.log("Users table created or already exists.");
+    console.log("Users table and policies created or updated.");
 
     // Create products table
      await supabaseAdmin.rpc('run_sql', {
         sql: `
+        -- Drop existing policies to prevent errors on re-run
+        DROP POLICY IF EXISTS "Public can view products" ON public.products;
+        DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
+
         CREATE TABLE IF NOT EXISTS public.products (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             name VARCHAR(255) NOT NULL,
@@ -67,18 +74,23 @@ async function createTables(supabaseAdmin: any) {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-        DROP POLICY IF EXISTS "Public can view products" ON public.products;
+        
         CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
-        DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
-        CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
         `
     });
-    console.log("Products table created or already exists.");
+    console.log("Products table and policies created or updated.");
 
     // Create coupons table
     await supabaseAdmin.rpc('run_sql', {
         sql: `
-         CREATE TABLE IF NOT EXISTS public.coupons (
+        -- Drop existing policies to prevent errors on re-run
+        DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+        DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
+        DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
+        DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
+        
+        CREATE TABLE IF NOT EXISTS public.coupons (
             id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             code VARCHAR(255) UNIQUE NOT NULL,
             discount_percent INT NOT NULL,
@@ -90,21 +102,14 @@ async function createTables(supabaseAdmin: any) {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
-        DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+
         CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
-        DROP POLICY IF EXISTS "Users can see their own coupons" ON public.coupons;
-        CREATE POLICY "Users can see their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
-        DROP POLICY IF EXISTS "Managers can see all coupons" ON public.coupons;
-        CREATE POLICY "Managers can see all coupons" ON public.coupons FOR SELECT USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
-        DROP POLICY IF EXISTS "Users can create coupons" ON public.coupons;
-        CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
-        DROP POLICY IF EXISTS "Users can update their own coupons" ON public.coupons;
-        CREATE POLICY "Users can update their own coupons" ON public.coupons FOR UPDATE USING (auth.uid() = user_id);
-        DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
-        CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        CREATE POLICY "Users can manage their own coupons" ON public.coupons FOR ALL USING (auth.uid() = user_id);
+        CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+        CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
         `
     });
-     console.log("Coupons table created or already exists.");
+     console.log("Coupons table and policies created or updated.");
 }
 
 export async function seedDatabase() {
