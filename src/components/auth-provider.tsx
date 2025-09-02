@@ -55,17 +55,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      await fetchProfile(currentUser);
+      if (currentUser) {
+        await fetchProfile(currentUser);
+      } else {
+        setLoading(false);
+      }
     };
 
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
-        // Fetch profile only if user changes
         if (user?.id !== currentUser?.id) {
           setUser(currentUser);
-          await fetchProfile(currentUser);
+          if(currentUser) {
+            setLoading(true);
+            await fetchProfile(currentUser);
+          } else {
+            setProfile(null);
+            setLoading(false);
+          }
         }
     });
 
