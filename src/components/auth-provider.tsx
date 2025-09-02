@@ -24,7 +24,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const fetchProfile = useCallback(async (user: User | null) => {
     try {
-      setLoading(true);
       if (!user) {
           setProfile(null);
           return;
@@ -56,17 +55,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser);
-      } else {
-        setLoading(false);
-      }
+      await fetchProfile(currentUser);
     };
 
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
+        // Fetch profile only if user changes
         if (user?.id !== currentUser?.id) {
           setUser(currentUser);
           await fetchProfile(currentUser);
@@ -81,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
-      email,
+      email: email,
       password: password,
     });
     if (error) throw error;

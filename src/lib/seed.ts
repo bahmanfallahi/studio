@@ -23,10 +23,15 @@ async function deleteExistingData(supabaseAdmin: any) {
   
   // The CASCADE delete on auth.users should have handled public.users.
   // The CASCADE delete on products should have handled coupons.
-  // We'll just delete products to be safe.
+  // We'll just delete products to be safe, which will also cascade to coupons.
   const { error: productError } = await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
   if (productError) console.error(`Could not delete products (might be okay if tables dont exist yet): ${productError.message}`);
   
+  // Also explicitly delete users table to be safe, in case cascade didn't work.
+  const { error: usersError } = await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (usersError) console.error(`Could not delete users (might be okay if tables dont exist yet): ${usersError.message}`);
+
+
   console.log("Data cleanup finished.");
 }
 
@@ -68,44 +73,70 @@ async function setupTables(supabaseAdmin: any) {
       );
       ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 
-      -- USERS RLS
+      -- Drop existing policies before creating new ones to avoid errors on re-runs
       DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
-      CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
-      
       DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
-      CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-      
       DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
-      CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
-
       DROP POLICY IF EXISTS "Managers can delete any user" ON public.users;
+      
+      DROP POLICY IF EXISTS "Public can view products" ON public.products;
+      DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
+
+      DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+      DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
+
+
+      -- USERS RLS
+      CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
+      CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
       CREATE POLICY "Managers can delete any user" ON public.users FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
       
       -- PRODUCTS RLS
-      DROP POLICY IF EXISTS "Public can view products" ON public.products;
       CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
-
-      DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
       CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
 
       -- COUPONS RLS
-      DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
       CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
-
-      DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
       CREATE POLICY "Users can manage their own coupons" ON public.coupons FOR ALL USING (auth.uid() = user_id);
-
-      DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
       CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-      
-      DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
       CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
     `;
     
-    const { error: schemaError } = await supabaseAdmin.rpc('run_sql', { sql: schemaSQL });
+    // We use a temporary function to execute the SQL. This is a common pattern for multi-statement SQL.
+    const { error: schemaError } = await supabaseAdmin.rpc('exec', { sql: schemaSQL });
     if (schemaError) throw new Error(`Table setup failed: ${schemaError.message}`);
 
     console.log("Tables and policies created or updated successfully.");
+}
+
+// A helper function to execute raw SQL, as Supabase client doesn't directly support multi-statement queries.
+async function createExecSqlFunction(supabaseAdmin: any) {
+  const { error } = await supabaseAdmin.rpc('exec', { sql: 'SELECT 1;' }).catch(e => ({ error: e }));
+
+  if (error && error.code === '42883') { // "function does not exist"
+    console.log('exec() function not found. Creating it...');
+    const { error: createFnError } = await supabaseAdmin.rpc('run_sql', {
+      sql: `
+        CREATE OR REPLACE FUNCTION exec(sql text) RETURNS void AS $$
+        BEGIN
+          EXECUTE sql;
+        END;
+        $$ LANGUAGE plpgsql;
+      `
+    });
+
+    if (createFnError) {
+      throw new Error(`Failed to create exec() function: ${createFnError.message}`);
+    }
+    console.log('exec() function created.');
+  } else if (error) {
+    console.error('Error checking for exec() function:', error.message);
+  } else {
+    console.log('exec() function already exists.');
+  }
 }
 
 export async function seedDatabase() {
@@ -121,12 +152,12 @@ export async function seedDatabase() {
 
   console.log("Starting database seed...");
   
-  // It's safer to just try creating tables/policies first.
-  await setupTables(supabaseAdmin);
+  // Create helper function for multi-statement SQL if it doesn't exist
+  await createExecSqlFunction(supabaseAdmin);
+  
+  // It's safer to delete data first, then set up tables and policies.
   await deleteExistingData(supabaseAdmin);
-  // Rerun setup in case delete cascade removed tables (it shouldn't but as a safeguard)
   await setupTables(supabaseAdmin);
-
 
   // ---- 1. Seed Users and Profiles ----
   const usersToSeed = [
@@ -256,5 +287,3 @@ export async function seedDatabase() {
   console.log("Database seed completed successfully.");
   return { success: true, message: 'پایگاه داده با موفقیت با داده‌های اولیه پر شد. کاربران، محصولات و کوپن‌ها ایجاد شدند.' };
 }
-
-    
