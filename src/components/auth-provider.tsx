@@ -9,7 +9,7 @@ import { UserProfile } from '@/lib/data';
 interface AuthContextType {
   user: User | null;
   profile: UserProfile | null;
-  login: (email: string, password_hash: string) => Promise<any>;
+  login: (email: string, password: string) => Promise<any>;
   logout: () => void;
   loading: boolean;
 }
@@ -42,6 +42,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(userProfile);
       }
+    } catch (e) {
+      console.error("An unexpected error occurred in fetchProfile:", e);
+      setProfile(null);
     } finally {
         setLoading(false);
     }
@@ -49,11 +52,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const getInitialSession = async () => {
+      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      await fetchProfile(currentUser);
-      // No need to setLoading(false) here, fetchProfile handles it.
+      if (currentUser) {
+        await fetchProfile(currentUser);
+      } else {
+        setLoading(false);
+      }
     };
 
     getInitialSession();
@@ -69,17 +76,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile, user]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const login = async (email: string, password_hash: string) => {
+  const login = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
       email,
-      password: password_hash,
+      password: password,
     });
     if (error) throw error;
   };
 
   const logout = async () => {
+    setLoading(true);
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
@@ -104,5 +113,3 @@ export const useAuth = () => {
   }
   return context;
 };
-
-    
