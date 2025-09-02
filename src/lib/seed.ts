@@ -9,27 +9,30 @@ import { UserProfile, Product, Coupon } from '@/lib/data';
 async function deleteExistingData(supabaseAdmin: any) {
   console.log("Starting data cleanup...");
   
+  // Delete all users from auth.users which will cascade to public.users
   const { data: { users: authUsers }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
   if (listError) throw new Error(`Error listing users: ${listError.message}`);
 
   if (authUsers.length > 0) {
       console.log(`Found ${authUsers.length} users in auth. Deleting...`);
-      const deletePromises = authUsers.map(user => supabaseAdmin.auth.admin.deleteUser(user.id));
-      await Promise.all(deletePromises);
+      for (const user of authUsers) {
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+      }
       console.log("All auth users deleted. Corresponding public.users entries should be deleted via CASCADE.");
   } else {
       console.log("No existing auth users to delete.");
   }
   
-  // The CASCADE delete on auth.users should have handled public.users.
-  // The CASCADE delete on products should have handled coupons.
-  // We'll just delete products to be safe, which will also cascade to coupons.
+  // The CASCADE delete on auth.users should handle public.users.
+  // We also delete all products, which will cascade to coupons.
   const { error: productError } = await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (productError) console.error(`Could not delete products (might be okay if tables dont exist yet): ${productError.message}`);
-  
-  // Also explicitly delete users table to be safe, in case cascade didn't work.
+  if (productError) console.error(`Could not delete products (this is okay if tables don't exist yet): ${productError.message}`);
+
+  // Also explicitly delete users and coupons tables to be safe, in case cascade didn't work.
   const { error: usersError } = await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (usersError) console.error(`Could not delete users (might be okay if tables dont exist yet): ${usersError.message}`);
+   if (usersError) console.error(`Could not delete users (this is okay if tables don't exist yet): ${usersError.message}`);
+  const { error: couponsError } = await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  if (couponsError) console.error(`Could not delete coupons (this is okay if tables don't exist yet): ${couponsError.message}`);
 
 
   console.log("Data cleanup finished.");
@@ -66,7 +69,7 @@ async function setupTables(supabaseAdmin: any) {
           discount_percent INT NOT NULL,
           status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'used')),
           product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
-          user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES public.users(id) ON DELETE SET NULL,
           note TEXT,
           expires_at TIMESTAMP WITH TIME ZONE,
           created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -83,9 +86,10 @@ async function setupTables(supabaseAdmin: any) {
       DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
 
       DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
-      DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Users can view their own coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Users can create coupons" ON public.coupons;
       DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
-      DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Managers can manage coupons" ON public.coupons;
 
 
       -- USERS RLS
@@ -100,12 +104,12 @@ async function setupTables(supabaseAdmin: any) {
 
       -- COUPONS RLS
       CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
-      CREATE POLICY "Users can manage their own coupons" ON public.coupons FOR ALL USING (auth.uid() = user_id);
+      CREATE POLICY "Users can view their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
+      CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
       CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-      CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      CREATE POLICY "Managers can manage coupons" ON public.coupons FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
     `;
     
-    // We use a temporary function to execute the SQL. This is a common pattern for multi-statement SQL.
     const { error: schemaError } = await supabaseAdmin.rpc('exec', { sql: schemaSQL });
     if (schemaError) throw new Error(`Table setup failed: ${schemaError.message}`);
 
@@ -114,8 +118,10 @@ async function setupTables(supabaseAdmin: any) {
 
 // A helper function to execute raw SQL, as Supabase client doesn't directly support multi-statement queries.
 async function createExecSqlFunction(supabaseAdmin: any) {
-  const { error } = await supabaseAdmin.rpc('exec', { sql: 'SELECT 1;' }).catch(e => ({ error: e }));
+  // Check if the function exists
+  const { data, error } = await supabaseAdmin.rpc('exec', { sql: 'SELECT 1;' }).catch(e => ({ data: null, error: e }));
 
+  // If the function doesn't exist, create it.
   if (error && error.code === '42883') { // "function does not exist"
     console.log('exec() function not found. Creating it...');
     const { error: createFnError } = await supabaseAdmin.rpc('run_sql', {
@@ -133,8 +139,10 @@ async function createExecSqlFunction(supabaseAdmin: any) {
     }
     console.log('exec() function created.');
   } else if (error) {
+    // For other errors, just log them
     console.error('Error checking for exec() function:', error.message);
   } else {
+    // If no error, the function already exists.
     console.log('exec() function already exists.');
   }
 }
@@ -152,10 +160,8 @@ export async function seedDatabase() {
 
   console.log("Starting database seed...");
   
-  // Create helper function for multi-statement SQL if it doesn't exist
   await createExecSqlFunction(supabaseAdmin);
   
-  // It's safer to delete data first, then set up tables and policies.
   await deleteExistingData(supabaseAdmin);
   await setupTables(supabaseAdmin);
 
@@ -188,7 +194,7 @@ export async function seedDatabase() {
   console.log("Seeding users and profiles...");
 
   for (const userData of usersToSeed) {
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: userData.email,
         password: userData.password,
         email_confirm: true,
@@ -198,13 +204,14 @@ export async function seedDatabase() {
       console.error(`Error creating auth user ${userData.email}:`, authError);
       throw new Error(`خطا در ایجاد کاربر ${userData.email}: ${authError.message}`);
     }
-    
-    const authUser = authData.user;
-    if (!authUser) continue;
-    console.log(`Created auth user: ${authUser.email} with ID: ${authUser.id}`);
+    if (!user) {
+        console.error(`User object was null for ${userData.email}`);
+        continue;
+    };
+    console.log(`Created auth user: ${user.email} with ID: ${user.id}`);
 
     const profileData = {
-        id: authUser.id,
+        id: user.id,
         full_name: userData.full_name,
         role: userData.role,
         coupon_limit_per_month: userData.coupon_limit_per_month,
@@ -214,10 +221,10 @@ export async function seedDatabase() {
 
     if (profileError) {
         console.error(`Error creating profile for ${userData.email}:`, profileError);
-        await supabaseAdmin.auth.admin.deleteUser(authUser.id); // Rollback auth user
+        await supabaseAdmin.auth.admin.deleteUser(user.id); // Rollback auth user
         throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
     }
-    console.log(`Created profile for: ${authUser.email}`);
+    console.log(`Created profile for: ${user.email}`);
     createdUsers.push(profileData);
   }
   
