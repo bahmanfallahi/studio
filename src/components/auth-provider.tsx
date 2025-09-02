@@ -22,45 +22,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   
   const fetchProfile = useCallback(async (user: User | null) => {
-    if (!user) {
-        setProfile(null);
-        return;
-    }
-    
-    const { data: userProfile, error } = await supabase
-      .from('users')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    setLoading(true);
+    try {
+      if (!user) {
+          setProfile(null);
+          return;
+      }
+      
+      const { data: userProfile, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', user.id)
+        .single();
 
-    if (error) {
-      console.error("Error fetching profile:", error.message);
-      setProfile(null);
-    } else {
-      setProfile(userProfile);
+      if (error) {
+        console.error("Error fetching profile:", error.message);
+        setProfile(null);
+      } else {
+        setProfile(userProfile);
+      }
+    } finally {
+        setLoading(false);
     }
   }, [supabase]);
 
   useEffect(() => {
-    const getSession = async () => {
-      setLoading(true);
+    const getInitialSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser);
-      }
-      setLoading(false);
+      await fetchProfile(currentUser);
     };
 
-    getSession();
+    getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
-        setLoading(true);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         await fetchProfile(currentUser);
-        setLoading(false);
     });
 
     return () => {
