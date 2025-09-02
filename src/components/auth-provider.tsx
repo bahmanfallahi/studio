@@ -1,3 +1,4 @@
+
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback } from 'react';
@@ -22,8 +23,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   
   const fetchProfile = useCallback(async (user: User | null) => {
-    setLoading(true);
     try {
+      setLoading(true);
       if (!user) {
           setProfile(null);
           return;
@@ -52,20 +53,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       await fetchProfile(currentUser);
+      // No need to setLoading(false) here, fetchProfile handles it.
     };
 
     getInitialSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
-        await fetchProfile(currentUser);
+        if (user?.id !== currentUser?.id) {
+          setUser(currentUser);
+          await fetchProfile(currentUser);
+        }
     });
 
     return () => {
       authListener?.subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile]);
+  }, [supabase, fetchProfile, user]);
 
   const login = async (email: string, password_hash: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -79,6 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    setLoading(false);
   };
 
   const value = {
@@ -99,3 +104,5 @@ export const useAuth = () => {
   }
   return context;
 };
+
+    

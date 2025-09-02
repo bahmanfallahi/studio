@@ -9,118 +9,103 @@ import { UserProfile, Product, Coupon } from '@/lib/data';
 async function deleteExistingData(supabaseAdmin: any) {
   console.log("Starting data cleanup...");
   
-  // 1. Delete all users from auth.users
   const { data: { users: authUsers }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
   if (listError) throw new Error(`Error listing users: ${listError.message}`);
 
   if (authUsers.length > 0) {
       console.log(`Found ${authUsers.length} users in auth. Deleting...`);
-      // The CASCADE on the public.users table's foreign key will handle deletions there.
       const deletePromises = authUsers.map(user => supabaseAdmin.auth.admin.deleteUser(user.id));
       await Promise.all(deletePromises);
-      console.log("All auth users deleted. Corresponding public.users entries deleted via CASCADE.");
+      console.log("All auth users deleted. Corresponding public.users entries should be deleted via CASCADE.");
   } else {
       console.log("No existing auth users to delete.");
   }
-
-  // 2. Delete all products
-  // Coupons will be deleted by the CASCADE constraint on the products table.
+  
+  // The CASCADE delete on auth.users should have handled public.users.
+  // The CASCADE delete on products should have handled coupons.
+  // We'll just delete products to be safe.
   const { error: productError } = await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-  if (productError) throw new Error(`Error deleting products: ${productError.message}`);
-  console.log("All products and related coupons deleted.");
-
+  if (productError) console.error(`Could not delete products (might be okay if tables dont exist yet): ${productError.message}`);
+  
   console.log("Data cleanup finished.");
 }
 
-async function createTables(supabaseAdmin: any) {
-    console.log("Creating tables and setting RLS policies...");
+async function setupTables(supabaseAdmin: any) {
+    console.log("Setting up tables and RLS policies...");
+
+    const schemaSQL = `
+      -- Create users table
+      CREATE TABLE IF NOT EXISTS public.users (
+          id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+          full_name VARCHAR(255),
+          role VARCHAR(50) DEFAULT 'sales' CHECK (role IN ('sales', 'manager')),
+          coupon_limit_per_month INT DEFAULT 10
+      );
+      ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+      
+      -- Create products table
+      CREATE TABLE IF NOT EXISTS public.products (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          name VARCHAR(255) NOT NULL,
+          description TEXT,
+          price NUMERIC(10, 2) NOT NULL,
+          is_active BOOLEAN DEFAULT TRUE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+      
+      -- Create coupons table
+      CREATE TABLE IF NOT EXISTS public.coupons (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          code VARCHAR(255) UNIQUE NOT NULL,
+          discount_percent INT NOT NULL,
+          status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'used')),
+          product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
+          user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+          note TEXT,
+          expires_at TIMESTAMP WITH TIME ZONE,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+      );
+      ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+
+      -- USERS RLS
+      DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
+      CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
+      
+      DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
+      CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      
+      DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
+      CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+
+      DROP POLICY IF EXISTS "Managers can delete any user" ON public.users;
+      CREATE POLICY "Managers can delete any user" ON public.users FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      
+      -- PRODUCTS RLS
+      DROP POLICY IF EXISTS "Public can view products" ON public.products;
+      CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
+
+      DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
+      CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+
+      -- COUPONS RLS
+      DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+      CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
+
+      DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
+      CREATE POLICY "Users can manage their own coupons" ON public.coupons FOR ALL USING (auth.uid() = user_id);
+
+      DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
+      CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      
+      DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
+      CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+    `;
     
-    // Drop existing tables if they exist
-    await supabaseAdmin.from('coupons').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabaseAdmin.from('products').delete().neq('id', '00000000-0000-0000-0000-000000000000');
-    await supabaseAdmin.from('users').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    const { error: schemaError } = await supabaseAdmin.rpc('run_sql', { sql: schemaSQL });
+    if (schemaError) throw new Error(`Table setup failed: ${schemaError.message}`);
 
-    // Create users table
-    const { error: usersError } = await supabaseAdmin.rpc('run_sql', {
-        sql: `
-        CREATE TABLE IF NOT EXISTS public.users (
-            id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-            full_name VARCHAR(255),
-            role VARCHAR(50) DEFAULT 'sales' CHECK (role IN ('sales', 'manager')),
-            coupon_limit_per_month INT DEFAULT 10
-        );
-        ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-        
-        DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
-        CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
-        
-        DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
-        CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-        
-        DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
-        CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
-
-        DROP POLICY IF EXISTS "Managers can delete any user" ON public.users;
-        CREATE POLICY "Managers can delete any user" ON public.users FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-        `
-    });
-    if (usersError) throw new Error(`Users table creation failed: ${usersError.message}`);
-    console.log("Users table and policies created or updated.");
-
-    // Create products table
-     const { error: productsTableError } = await supabaseAdmin.rpc('run_sql', {
-        sql: `
-        CREATE TABLE IF NOT EXISTS public.products (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            price NUMERIC(10, 2) NOT NULL,
-            is_active BOOLEAN DEFAULT TRUE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-        ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-        
-        DROP POLICY IF EXISTS "Public can view products" ON public.products;
-        CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
-
-        DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
-        CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-        `
-    });
-    if (productsTableError) throw new Error(`Products table creation failed: ${productsTableError.message}`);
-    console.log("Products table and policies created or updated.");
-
-    // Create coupons table
-    const { error: couponsTableError } = await supabaseAdmin.rpc('run_sql', {
-        sql: `
-        CREATE TABLE IF NOT EXISTS public.coupons (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            code VARCHAR(255) UNIQUE NOT NULL,
-            discount_percent INT NOT NULL,
-            status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'expired', 'used')),
-            product_id UUID REFERENCES public.products(id) ON DELETE CASCADE,
-            user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
-            note TEXT,
-            expires_at TIMESTAMP WITH TIME ZONE,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-        );
-        ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
-
-        DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
-        CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
-
-        DROP POLICY IF EXISTS "Users can manage their own coupons" ON public.coupons;
-        CREATE POLICY "Users can manage their own coupons" ON public.coupons FOR ALL USING (auth.uid() = user_id);
-
-        DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
-        CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-        
-        DROP POLICY IF EXISTS "Managers can delete coupons" ON public.coupons;
-        CREATE POLICY "Managers can delete coupons" ON public.coupons FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-        `
-    });
-    if (couponsTableError) throw new Error(`Coupons table creation failed: ${couponsTableError.message}`);
-     console.log("Coupons table and policies created or updated.");
+    console.log("Tables and policies created or updated successfully.");
 }
 
 export async function seedDatabase() {
@@ -136,8 +121,12 @@ export async function seedDatabase() {
 
   console.log("Starting database seed...");
   
+  // It's safer to just try creating tables/policies first.
+  await setupTables(supabaseAdmin);
   await deleteExistingData(supabaseAdmin);
-  await createTables(supabaseAdmin);
+  // Rerun setup in case delete cascade removed tables (it shouldn't but as a safeguard)
+  await setupTables(supabaseAdmin);
+
 
   // ---- 1. Seed Users and Profiles ----
   const usersToSeed = [
@@ -267,3 +256,5 @@ export async function seedDatabase() {
   console.log("Database seed completed successfully.");
   return { success: true, message: 'پایگاه داده با موفقیت با داده‌های اولیه پر شد. کاربران، محصولات و کوپن‌ها ایجاد شدند.' };
 }
+
+    
