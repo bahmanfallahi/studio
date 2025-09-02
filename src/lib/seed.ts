@@ -132,8 +132,8 @@ export async function seedDatabase() {
   const usersToSeed = [
     {
       email: 'bahman.f.behtash@gmail.com',
-      password: 'Bahman123!',
-      full_name: 'بهمن بهتاش',
+      password: '123456',
+      full_name: 'bahman fallahi',
       role: 'manager' as const,
       coupon_limit_per_month: 999,
     },
