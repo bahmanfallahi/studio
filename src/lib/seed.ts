@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 import { UserProfile, Product, Coupon } from '@/lib/data';
 
@@ -46,6 +47,8 @@ async function createTables(supabaseAdmin: any) {
         ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
         DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
         CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
+        DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
+        CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
         DROP POLICY IF EXISTS "Managers can update user roles and limits" ON public.users;
         CREATE POLICY "Managers can update user roles and limits" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
         `
@@ -64,8 +67,8 @@ async function createTables(supabaseAdmin: any) {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
-        DROP POLICY IF EXISTS "Authenticated users can see all products" ON public.products;
-        CREATE POLICY "Authenticated users can see all products" ON public.products FOR SELECT USING (auth.role() = 'authenticated');
+        DROP POLICY IF EXISTS "Public can view products" ON public.products;
+        CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
         DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
         CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
         `
@@ -87,6 +90,8 @@ async function createTables(supabaseAdmin: any) {
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         );
         ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+        CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
         DROP POLICY IF EXISTS "Users can see their own coupons" ON public.coupons;
         CREATE POLICY "Users can see their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
         DROP POLICY IF EXISTS "Managers can see all coupons" ON public.coupons;
