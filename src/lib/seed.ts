@@ -42,6 +42,7 @@ async function createTables(supabaseAdmin: any) {
         DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
         DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
         DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
+        DROP POLICY IF EXISTS "Managers can delete any user" ON public.users;
 
         CREATE TABLE IF NOT EXISTS public.users (
             id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
@@ -54,6 +55,7 @@ async function createTables(supabaseAdmin: any) {
         CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
         CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
         CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
+        CREATE POLICY "Managers can delete any user" ON public.users FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
         `
     });
     console.log("Users table and policies created or updated.");
