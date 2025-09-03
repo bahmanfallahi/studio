@@ -123,8 +123,9 @@ async function setupTables(supabaseAdmin: any) {
       SECURITY DEFINER SET SEARCH_PATH = public
       AS $$
       BEGIN
-        INSERT INTO public.users (id, full_name, role)
-        VALUES (new.id, new.raw_user_meta_data->>'full_name', 'sales'); -- Default role is 'sales'
+        -- Correctly inserts the default coupon limit for new sales users
+        INSERT INTO public.users (id, full_name, role, coupon_limit_per_month)
+        VALUES (new.id, new.raw_user_meta_data->>'full_name', 'sales', 10);
         RETURN NEW;
       END;
       $$;
@@ -209,11 +210,12 @@ export async function seedDatabase() {
   console.log("Seeding users and profiles...");
 
   for (const userData of usersToSeed) {
-    // We create the auth user first
+    // 1. Create the auth user
     const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: userData.email,
         password: userData.password,
         email_confirm: true,
+        user_metadata: { full_name: userData.full_name } // Pass full_name here
     });
 
     if (authError) {
@@ -226,22 +228,25 @@ export async function seedDatabase() {
     };
     console.log(`Created auth user: ${user.email} with ID: ${user.id}`);
     
-    // The trigger will automatically create the public.users row with default values.
-    // We only need to UPDATE it with the correct role and limit.
+    // 2. Explicitly INSERT the profile. This is more reliable than trigger + update.
+    // The trigger will not run for this insert because we are using the admin client.
     const profileData = {
+        id: user.id, // Match the auth user's ID
         full_name: userData.full_name,
         role: userData.role,
         coupon_limit_per_month: userData.coupon_limit_per_month,
     };
   
-    const { error: profileError } = await supabaseAdmin.from('users').update(profileData).eq('id', user.id);
+    const { error: profileError } = await supabaseAdmin.from('users').insert(profileData);
 
     if (profileError) {
-        console.error(`Error updating profile for ${userData.email}:`, profileError);
-        // If profile update fails, we should still consider the user created. The trigger handled the basic insert.
+        console.error(`Error inserting profile for ${userData.email}:`, profileError);
+        // If profile insert fails, we should roll back the auth user to avoid inconsistencies
+        await supabaseAdmin.auth.admin.deleteUser(user.id);
+        throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
     }
-    console.log(`Updated profile for: ${user.email}`);
-    createdUsers.push({ id: user.id, ...profileData });
+    console.log(`Inserted profile for: ${user.email}`);
+    createdUsers.push(profileData);
   }
   
   // ---- 2. Seed Products ----
