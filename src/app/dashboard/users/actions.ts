@@ -45,8 +45,19 @@ export async function fetchUsers(): Promise<{ data: UserWithAuth[] | null, error
 
 export async function saveUser(userData: Partial<UserWithAuth>, password?: string): Promise<{ success: boolean; error?: string }> {
     const supabase = createClient();
-    const { id, full_name, email, role, coupon_limit_per_month } = userData;
+    let { id, full_name, email, role, coupon_limit_per_month } = userData;
     
+    // If role is manager, coupon limit is irrelevant. Set to a high number or null.
+    if (role === 'manager') {
+        coupon_limit_per_month = 999;
+    }
+
+    const profileData = {
+        full_name,
+        role,
+        coupon_limit_per_month
+    };
+
     // UPDATE
     if (id) {
         // Update auth user if password is provided
@@ -57,7 +68,7 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
         
         // Update public user profile
         const { error: profileError } = await supabase.from('users')
-            .update({ full_name, role, coupon_limit_per_month })
+            .update(profileData)
             .eq('id', id);
 
         if (profileError) return { success: false, error: profileError.message };
@@ -81,9 +92,7 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
         // Create public user profile
         const { error: profileError } = await supabase.from('users').insert({
             id: user.id,
-            full_name,
-            role,
-            coupon_limit_per_month,
+            ...profileData,
         });
 
         if (profileError) {
@@ -94,6 +103,7 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
     }
     
     revalidatePath('/dashboard/users');
+    revalidatePath('/dashboard/settings');
     return { success: true };
 }
 

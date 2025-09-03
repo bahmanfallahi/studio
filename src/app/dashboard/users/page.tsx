@@ -117,18 +117,20 @@ function UserForm({
           </div>
           <div>
             <Label htmlFor="role">نقش</Label>
-            <Select onValueChange={handleRoleChange} defaultValue={formData.role}>
+            <Select onValueChange={handleRoleChange} value={formData.role} defaultValue={formData.role}>
               <SelectTrigger><SelectValue placeholder="یک نقش انتخاب کنید" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="sales">نماینده فروش</SelectItem>
-                <SelectItem value="manager">مدیر فروش</SelectItem>
+                <SelectItem value="manager">مدیر</SelectItem>
               </SelectContent>
             </Select>
           </div>
-           <div>
-            <Label htmlFor="coupon_limit_per_month">سقف ماهانه کوپن</Label>
-            <Input id="coupon_limit_per_month" name="coupon_limit_per_month" type="number" value={formData.coupon_limit_per_month || 10} onChange={handleChange} required/>
-          </div>
+          {formData.role === 'sales' && (
+             <div>
+              <Label htmlFor="coupon_limit_per_month">سقف ماهانه کوپن</Label>
+              <Input id="coupon_limit_per_month" name="coupon_limit_per_month" type="number" value={formData.coupon_limit_per_month || 10} onChange={handleChange} required/>
+            </div>
+          )}
           <DialogFooter>
             <Button variant="outline" onClick={onClose} disabled={isSaving}>انصراف</Button>
             <Button type="submit" disabled={isSaving}>
@@ -249,7 +251,7 @@ export default function UsersPage() {
                       {user.role === 'manager' ? 'مدیر' : 'نماینده فروش'}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'N/A'}</TableCell>
+                  <TableCell className="text-right">{user.role === 'sales' ? user.coupon_limit_per_month : 'نامحدود'}</TableCell>
                    <TableCell className="text-right">{user.created_at ? new Date(user.created_at).toLocaleDateString('fa-IR') : 'N/A'}</TableCell>
                   <TableCell className="text-center">
                     <AlertDialog>
