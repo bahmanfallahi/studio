@@ -82,12 +82,28 @@ async function setupTables(supabaseAdmin: any) {
         (role = 'manager' AND coupon_limit_per_month = 999) OR
         (role = 'sales' AND coupon_limit_per_month >= 0)
       );
+      
+      -- Function to get the role of the currently authenticated user without causing recursion.
+      CREATE OR REPLACE FUNCTION get_user_role()
+      RETURNS TEXT
+      LANGUAGE plpgsql
+      SECURITY DEFINER -- This is crucial to prevent recursion
+      SET search_path = public
+      AS $$
+      BEGIN
+        IF auth.uid() IS NULL THEN
+          RETURN 'anon';
+        ELSE
+          RETURN (SELECT role FROM users WHERE id = auth.uid());
+        END IF;
+      END;
+      $$;
 
       -- Drop existing policies before creating new ones to avoid errors on re-runs
       DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
-      DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
-      DROP POLICY IF EXISTS "Users can update their own profile or managers can update any" ON public.users;
-      DROP POLICY IF EXISTS "Managers can delete any user" ON public.users;
+      DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
+      DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+      DROP POLICY IF EXISTS "Managers can manage all users" ON public.users;
       
       DROP POLICY IF EXISTS "Public can view products" ON public.products;
       DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
@@ -101,20 +117,20 @@ async function setupTables(supabaseAdmin: any) {
 
       -- USERS RLS
       CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
-      CREATE POLICY "Managers can insert users" ON public.users FOR INSERT WITH CHECK (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-      CREATE POLICY "Users can update their own profile or managers can update any" ON public.users FOR UPDATE USING (auth.uid() = id OR (SELECT role FROM public.users WHERE id = auth.uid()) = 'manager');
-      CREATE POLICY "Managers can delete any user" ON public.users FOR DELETE USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
+      CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
+      CREATE POLICY "Managers can manage all users" ON public.users FOR ALL USING (get_user_role() = 'manager');
       
       -- PRODUCTS RLS
       CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
-      CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (get_user_role() = 'manager');
 
       -- COUPONS RLS
       CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
       CREATE POLICY "Users can view their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
       CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
-      CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
-      CREATE POLICY "Managers can manage coupons" ON public.coupons FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+      CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (get_user_role() = 'manager');
+      CREATE POLICY "Managers can manage coupons" ON public.coupons FOR ALL USING (get_user_role() = 'manager');
 
       -- Function to create a user profile row
       CREATE OR REPLACE FUNCTION public.handle_new_user()
