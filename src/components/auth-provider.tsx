@@ -24,6 +24,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   
   const fetchProfile = useCallback(async (user: User | null) => {
     try {
+      setLoading(true);
       if (!user) {
           setProfile(null);
           return;
@@ -33,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .maybeSingle(); // Use maybeSingle to prevent error if no profile is found
+        .maybeSingle(); 
 
       if (error) {
         console.error("Error fetching profile:", error.message);
@@ -51,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const getInitialSession = async () => {
-      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
@@ -62,8 +62,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
+        // Fetch profile only if user changes
         if (user?.id !== currentUser?.id) {
-          setLoading(true);
           setUser(currentUser);
           await fetchProfile(currentUser);
         }

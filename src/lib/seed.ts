@@ -203,20 +203,6 @@ export async function seedDatabase() {
       role: 'manager' as const,
       coupon_limit_per_month: 999,
     },
-    {
-      email: 'sales_agent_1@example.com',
-      password: 'password',
-      full_name: 'نماینده فروش ۱',
-      role: 'sales' as const,
-      coupon_limit_per_month: 10,
-    },
-     {
-      email: 'sales_agent_2@example.com',
-      password: 'password',
-      full_name: 'نماینده فروش ۲',
-      role: 'sales' as const,
-      coupon_limit_per_month: 15,
-    },
   ];
 
   const createdUsers: UserProfile[] = [];
@@ -277,34 +263,17 @@ export async function seedDatabase() {
   // ---- 3. Seed Coupons ----
   console.log("Seeding coupons...");
   if (createdProducts && createdProducts.length > 0 && createdUsers.length > 0) {
-    const salesAgent1 = createdUsers.find(u => u.full_name === 'نماینده فروش ۱');
-    const salesAgent2 = createdUsers.find(u => u.full_name === 'نماینده فروش ۲');
+    const managerUser = createdUsers.find(u => u.role === 'manager');
     
-    if (salesAgent1 && salesAgent2) {
+    if (managerUser) {
       const couponsToSeed: Omit<Coupon, 'id' | 'created_at' | 'code'>[] = [
         {
           discount_percent: 15,
           status: 'active',
           product_id: createdProducts[0].id,
-          user_id: salesAgent1.id,
-          note: 'برای مشتری ویژه',
-          expires_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-         {
-          discount_percent: 20,
-          status: 'used',
-          product_id: createdProducts[1].id,
-          user_id: salesAgent2.id,
-          note: 'فروش موفق',
-          expires_at: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        {
-          discount_percent: 10,
-          status: 'expired',
-          product_id: createdProducts[0].id,
-          user_id: salesAgent1.id,
-          note: 'منقضی شده',
-          expires_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+          user_id: managerUser.id,
+          note: 'کوپن نمونه برای مدیر',
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
         },
       ];
 
