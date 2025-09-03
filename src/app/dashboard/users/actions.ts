@@ -47,7 +47,7 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
     const supabase = createClient();
     let { id, full_name, email, role, coupon_limit_per_month } = userData;
     
-    // If role is manager, coupon limit is irrelevant. Set to a high number or null.
+    // Enforce business logic: Managers have a fixed limit of 999 (unlimited)
     if (role === 'manager') {
         coupon_limit_per_month = 999;
     }
@@ -89,14 +89,15 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
         if (authError) return { success: false, error: authError.message };
         if (!user) return { success: false, error: 'کاربر ایجاد نشد.' };
 
-        // Create public user profile
-        const { error: profileError } = await supabase.from('users').insert({
+        // The trigger 'on_auth_user_created' will create the initial profile.
+        // We now UPDATE it with the correct role and limit.
+        const { error: profileError } = await supabase.from('users').update({
             id: user.id,
             ...profileData,
-        });
+        }).eq('id', user.id);
 
         if (profileError) {
-            // Rollback auth user creation
+            // Rollback auth user creation if profile update fails
             await supabase.auth.admin.deleteUser(user.id);
             return { success: false, error: profileError.message };
         }

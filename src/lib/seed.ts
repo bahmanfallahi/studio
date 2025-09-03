@@ -76,6 +76,13 @@ async function setupTables(supabaseAdmin: any) {
       );
       ALTER TABLE public.coupons ENABLE ROW LEVEL SECURITY;
 
+      -- Add the business logic constraint for coupon limits
+      ALTER TABLE public.users DROP CONSTRAINT IF EXISTS role_based_coupon_limit;
+      ALTER TABLE public.users ADD CONSTRAINT role_based_coupon_limit CHECK (
+        (role = 'manager' AND coupon_limit_per_month = 999) OR
+        (role = 'sales' AND coupon_limit_per_month >= 0)
+      );
+
       -- Drop existing policies before creating new ones to avoid errors on re-runs
       DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
       DROP POLICY IF EXISTS "Managers can insert users" ON public.users;
@@ -233,7 +240,7 @@ export async function seedDatabase() {
     };
     console.log(`Created auth user: ${user.email} with ID: ${user.id}`);
     
-    // The trigger will automatically create the public.users row.
+    // The trigger will automatically create the public.users row with default values.
     // We only need to UPDATE it with the correct role and limit.
     const profileData = {
         full_name: userData.full_name,
