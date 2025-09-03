@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .from('users')
         .select('*')
         .eq('id', user.id)
-        .single();
+        .maybeSingle(); // Use maybeSingle to prevent error if no profile is found
 
       if (error) {
         console.error("Error fetching profile:", error.message);
@@ -55,11 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
-      if (currentUser) {
-        await fetchProfile(currentUser);
-      } else {
-        setLoading(false);
-      }
+      await fetchProfile(currentUser);
     };
 
     getInitialSession();
@@ -67,14 +63,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
         if (user?.id !== currentUser?.id) {
+          setLoading(true);
           setUser(currentUser);
-          if(currentUser) {
-            setLoading(true);
-            await fetchProfile(currentUser);
-          } else {
-            setProfile(null);
-            setLoading(false);
-          }
+          await fetchProfile(currentUser);
         }
     });
 

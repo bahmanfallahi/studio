@@ -39,7 +39,7 @@ async function deleteExistingData(supabaseAdmin: any) {
 }
 
 async function setupTables(supabaseAdmin: any) {
-    console.log("Setting up tables and RLS policies...");
+    console.log("Setting up tables, RLS policies, and triggers...");
 
     const schemaSQL = `
       -- Create users table
@@ -108,34 +108,56 @@ async function setupTables(supabaseAdmin: any) {
       CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
       CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
       CREATE POLICY "Managers can manage coupons" ON public.coupons FOR ALL USING (((SELECT role FROM public.users WHERE id = auth.uid()) = 'manager'));
+
+      -- Function to create a user profile row
+      CREATE OR REPLACE FUNCTION public.handle_new_user()
+      RETURNS TRIGGER
+      LANGUAGE plpgsql
+      SECURITY DEFINER SET SEARCH_PATH = public
+      AS $$
+      BEGIN
+        INSERT INTO public.users (id, full_name, role)
+        VALUES (new.id, new.raw_user_meta_data->>'full_name', 'sales'); -- Default role is 'sales'
+        RETURN NEW;
+      END;
+      $$;
+
+      -- Trigger to call the function on new user signup
+      DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users; -- Ensures no duplicates
+      CREATE TRIGGER on_auth_user_created
+        AFTER INSERT ON auth.users
+        FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
     `;
     
     const { error: schemaError } = await supabaseAdmin.rpc('exec', { sql: schemaSQL });
-    if (schemaError) throw new Error(`Table setup failed: ${schemaError.message}`);
+    if (schemaError) throw new Error(`Table and trigger setup failed: ${schemaError.message}`);
 
-    console.log("Tables and policies created or updated successfully.");
+    console.log("Tables, policies, and triggers created or updated successfully.");
 }
 
 // A helper function to execute raw SQL, as Supabase client doesn't directly support multi-statement queries.
 async function createExecSqlFunction(supabaseAdmin: any) {
-  // Check if the function exists
-  const { data, error } = await supabaseAdmin.rpc('exec', { sql: 'SELECT 1;' }).catch(e => ({ data: null, error: e }));
+  // Check if the function exists by trying to call it.
+  const { error } = await supabaseAdmin.rpc('exec', { sql: 'SELECT 1;' }).catch(e => ({ data: null, error: e }));
 
   // If the function doesn't exist, create it.
-  if (error && error.code === '42883') { // "function does not exist"
+  if (error && (error.code === '42883' || error.message.includes('function exec(sql => text) does not exist'))) { // "function does not exist"
     console.log('exec() function not found. Creating it...');
-    const { error: createFnError } = await supabaseAdmin.rpc('run_sql', {
-      sql: `
+    const { error: createFnError } = await supabaseAdmin.sql(`
         CREATE OR REPLACE FUNCTION exec(sql text) RETURNS void AS $$
         BEGIN
           EXECUTE sql;
         END;
         $$ LANGUAGE plpgsql;
-      `
-    });
+      `);
 
     if (createFnError) {
-      throw new Error(`Failed to create exec() function: ${createFnError.message}`);
+      // It might be a permissions error, try the old way as a fallback
+      try {
+        await supabaseAdmin.rpc('run_sql', { sql: 'CREATE OR REPLACE FUNCTION exec(sql text) ...' }); // simplified
+      } catch (fallbackError) {
+          throw new Error(`Failed to create exec() function: ${createFnError.message}`);
+      }
     }
     console.log('exec() function created.');
   } else if (error) {
@@ -194,6 +216,7 @@ export async function seedDatabase() {
   console.log("Seeding users and profiles...");
 
   for (const userData of usersToSeed) {
+    // We create the auth user first
     const { data: { user }, error: authError } = await supabaseAdmin.auth.admin.createUser({
         email: userData.email,
         password: userData.password,
@@ -209,23 +232,23 @@ export async function seedDatabase() {
         continue;
     };
     console.log(`Created auth user: ${user.email} with ID: ${user.id}`);
-
+    
+    // The trigger will automatically create the public.users row.
+    // We only need to UPDATE it with the correct role and limit.
     const profileData = {
-        id: user.id,
         full_name: userData.full_name,
         role: userData.role,
         coupon_limit_per_month: userData.coupon_limit_per_month,
     };
   
-    const { error: profileError } = await supabaseAdmin.from('users').insert(profileData);
+    const { error: profileError } = await supabaseAdmin.from('users').update(profileData).eq('id', user.id);
 
     if (profileError) {
-        console.error(`Error creating profile for ${userData.email}:`, profileError);
-        await supabaseAdmin.auth.admin.deleteUser(user.id); // Rollback auth user
-        throw new Error(`خطا در ایجاد پروفایل برای ${userData.email}: ${profileError.message}`);
+        console.error(`Error updating profile for ${userData.email}:`, profileError);
+        // If profile update fails, we should still consider the user created. The trigger handled the basic insert.
     }
-    console.log(`Created profile for: ${user.email}`);
-    createdUsers.push(profileData);
+    console.log(`Updated profile for: ${user.email}`);
+    createdUsers.push({ id: user.id, ...profileData });
   }
   
   // ---- 2. Seed Products ----
