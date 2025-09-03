@@ -105,6 +105,7 @@ export async function saveUser(userData: Partial<UserWithAuth>, password?: strin
     
     revalidatePath('/dashboard/users');
     revalidatePath('/dashboard/settings');
+    revalidatePath('/dashboard');
     return { success: true };
 }
 
@@ -121,5 +122,6 @@ export async function deleteUserAction(userId: string): Promise<{ success: boole
     }
 
     revalidatePath('/dashboard/users');
+    revalidatePath('/dashboard');
     return { success: true };
 }

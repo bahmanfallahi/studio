@@ -14,6 +14,7 @@ export async function addProduct(productData: Omit<Product, 'id' | 'created_at'>
   }
 
   revalidatePath('/dashboard/products');
+  revalidatePath('/dashboard');
   return { success: true };
 }
 
@@ -27,6 +28,7 @@ export async function updateProduct(productId: string, productData: Partial<Omit
   }
 
   revalidatePath('/dashboard/products');
+  revalidatePath('/dashboard');
   return { success: true };
 }
 
@@ -40,5 +42,6 @@ export async function deleteProduct(productId: string): Promise<{ success: boole
   }
 
   revalidatePath('/dashboard/products');
+  revalidatePath('/dashboard');
   return { success: true };
 }
