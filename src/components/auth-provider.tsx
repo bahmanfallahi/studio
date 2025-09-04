@@ -52,10 +52,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const getInitialSession = async () => {
+      setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       await fetchProfile(currentUser);
+      setLoading(false);
     };
 
     getInitialSession();
@@ -66,6 +68,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (user?.id !== currentUser?.id) {
           setUser(currentUser);
           await fetchProfile(currentUser);
+        } else if (!currentUser && user) {
+          // Handle logout case
+          setUser(null);
+          setProfile(null);
         }
     });
 
