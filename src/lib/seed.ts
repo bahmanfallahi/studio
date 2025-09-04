@@ -100,37 +100,67 @@ async function setupTables(supabaseAdmin: any) {
       $$;
 
       -- Drop existing policies before creating new ones to avoid errors on re-runs
-      DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
+      DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
+      DROP POLICY IF EXISTS "Managers can view all users" ON public.users;
       DROP POLICY IF EXISTS "Users can insert their own profile" ON public.users;
+      DROP POLICY IF EXISTS "Managers can manage users" ON public.users;
+      DROP POLICY IF EXISTS "Authenticated users can see all users" ON public.users;
       DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
       DROP POLICY IF EXISTS "Managers can manage all users" ON public.users;
       
       DROP POLICY IF EXISTS "Public can view products" ON public.products;
       DROP POLICY IF EXISTS "Managers can manage products" ON public.products;
 
-      DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
       DROP POLICY IF EXISTS "Users can view their own coupons" ON public.coupons;
-      DROP POLICY IF EXISTS "Users can create coupons" ON public.coupons;
       DROP POLICY IF EXISTS "Managers can view all coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Users can create their own coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Managers can manage all coupons" ON public.coupons;
+      DROP POLICY IF EXISTS "Public can view a single active coupon" ON public.coupons;
+      DROP POLICY IF EXISTS "Public can view coupons by code" ON public.coupons;
+      DROP POLICY IF EXISTS "Users can create coupons" ON public.coupons;
       DROP POLICY IF EXISTS "Managers can manage coupons" ON public.coupons;
 
 
-      -- USERS RLS
-      CREATE POLICY "Authenticated users can see all users" ON public.users FOR SELECT USING (auth.role() = 'authenticated');
-      CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT WITH CHECK (auth.uid() = id);
-      CREATE POLICY "Users can update their own profile" ON public.users FOR UPDATE USING (auth.uid() = id);
-      CREATE POLICY "Managers can manage all users" ON public.users FOR ALL USING (get_user_role() = 'manager');
-      
-      -- PRODUCTS RLS
-      CREATE POLICY "Public can view products" ON public.products FOR SELECT USING (true);
-      CREATE POLICY "Managers can manage products" ON public.products FOR ALL USING (get_user_role() = 'manager');
+      -- USERS RLS (Optimized & Secure)
+      -- 1. Users can see their own profile.
+      CREATE POLICY "Users can view their own profile" ON public.users FOR SELECT
+        USING (auth.uid() = id);
+      -- 2. Managers can see all profiles.
+      CREATE POLICY "Managers can view all users" ON public.users FOR SELECT
+        USING (get_user_role() = 'manager');
+      -- 3. Users can insert their own profile (e.g., during signup).
+      CREATE POLICY "Users can insert their own profile" ON public.users FOR INSERT
+        WITH CHECK (auth.uid() = id);
+      -- 4. Managers can manage (update/delete) any user.
+      CREATE POLICY "Managers can manage users" ON public.users FOR (UPDATE, DELETE)
+        USING (get_user_role() = 'manager');
 
-      -- COUPONS RLS
-      CREATE POLICY "Public can view coupons by code" ON public.coupons FOR SELECT USING (true);
-      CREATE POLICY "Users can view their own coupons" ON public.coupons FOR SELECT USING (auth.uid() = user_id);
-      CREATE POLICY "Users can create coupons" ON public.coupons FOR INSERT WITH CHECK (auth.uid() = user_id);
-      CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT USING (get_user_role() = 'manager');
-      CREATE POLICY "Managers can manage coupons" ON public.coupons FOR ALL USING (get_user_role() = 'manager');
+      -- PRODUCTS RLS (Optimized & Secure)
+      -- 1. Anyone can view products.
+      CREATE POLICY "Public can view products" ON public.products FOR SELECT
+        USING (true);
+      -- 2. Managers can do anything with products.
+      CREATE POLICY "Managers can manage products" ON public.products FOR (INSERT, UPDATE, DELETE)
+        USING (get_user_role() = 'manager');
+
+      -- COUPONS RLS (Optimized & Secure)
+      -- 1. Users can view their own created coupons.
+      CREATE POLICY "Users can view their own coupons" ON public.coupons FOR SELECT
+        USING (auth.uid() = user_id);
+      -- 2. Managers can view all coupons.
+      CREATE POLICY "Managers can view all coupons" ON public.coupons FOR SELECT
+        USING (get_user_role() = 'manager');
+      -- 3. Authenticated users can create coupons for themselves.
+      CREATE POLICY "Users can create their own coupons" ON public.coupons FOR INSERT
+        WITH CHECK (auth.uid() = user_id);
+      -- 4. Managers can manage any coupon.
+      CREATE POLICY "Managers can manage all coupons" ON public.coupons FOR (UPDATE, DELETE)
+        USING (get_user_role() = 'manager');
+      -- 5. A secure policy for public access to a single active coupon.
+      -- The application code MUST filter by coupon code. This policy adds a security layer.
+      CREATE POLICY "Public can view a single active coupon" ON public.coupons FOR SELECT
+        USING (status = 'active');
+
 
       -- Function to create a user profile row
       CREATE OR REPLACE FUNCTION public.handle_new_user()
